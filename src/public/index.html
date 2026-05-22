@@ -1,0 +1,132 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <meta
+      name="description"
+      content="Robinhood list and TradingView forecast dashboard for wheel strategy screening."
+    />
+    <title>Wheel Strategy Options Screener</title>
+    <link rel="icon" href="/favicon-32.png" sizes="32x32" type="image/png" />
+    <link rel="icon" href="/favicon-16.png" sizes="16x16" type="image/png" />
+    <link rel="apple-touch-icon" href="/apple-touch-icon.png" />
+    <link rel="stylesheet" href="/styles.css" />
+  </head>
+  <body>
+    <main class="app-shell">
+      <header class="topbar">
+        <div>
+          <p class="eyebrow">Robinhood + TradingView</p>
+          <h1>Wheel Strategy Options Screener</h1>
+        </div>
+        <div class="session-pill" id="sessionPill" aria-live="polite">Checking session...</div>
+      </header>
+
+      <section class="connection-band" aria-label="Robinhood connection">
+        <div class="connection-panel" id="connectionPanel">
+          <div>
+            <h2 id="connectionTitle">Robinhood</h2>
+            <p id="connectionSubtitle">Install the Chrome helper to scan Safe, Standard, and Mini lists.</p>
+          </div>
+          <div class="connection-actions" id="connectionActions">
+            <a id="installHelperLink" class="secondary-button" href="/helper.html">
+              Install Helper
+            </a>
+            <button id="connectButton" class="secondary-button" type="button">
+              Open Robinhood
+            </button>
+          </div>
+        </div>
+        <p class="disclosure">
+          Chrome helper reads list symbols locally. No password or Robinhood cookies are sent to this site.
+        </p>
+      </section>
+
+      <section class="control-band" aria-label="Scanner controls">
+        <label class="field">
+          <span>Portfolio value</span>
+          <input id="portfolioInput" type="number" min="0" step="100" value="10000" />
+        </label>
+
+        <div class="field">
+          <span>Screener</span>
+          <div class="segmented" id="screenerTabs" role="tablist"></div>
+        </div>
+
+        <div class="field">
+          <span>Source</span>
+          <div class="segmented compact" id="sourceModes" role="radiogroup" aria-label="Data source">
+            <button class="segment active" data-mode="mock" type="button">Mock</button>
+            <button class="segment" data-mode="live" type="button" disabled>Robinhood</button>
+          </div>
+        </div>
+
+        <button id="runButton" class="primary-button" type="button">Refresh</button>
+        <button id="exportButton" class="secondary-button" type="button" disabled>Export CSV</button>
+      </section>
+
+      <section class="summary-grid" aria-label="Scan summary">
+        <div class="metric">
+          <span>Eligible</span>
+          <strong id="eligibleMetric">0</strong>
+        </div>
+        <div class="metric">
+          <span>Symbols</span>
+          <strong id="symbolMetric">0</strong>
+        </div>
+        <div class="metric">
+          <span>Used</span>
+          <strong id="allocatedMetric">$0</strong>
+        </div>
+        <div class="metric">
+          <span>Updated</span>
+          <strong id="updatedMetric">Never</strong>
+        </div>
+      </section>
+
+      <section class="notice" id="notice" aria-live="polite" hidden></section>
+
+      <section class="table-section" aria-label="Screener results">
+        <div class="table-header">
+          <div>
+            <h2 id="tableTitle">Safe Screener</h2>
+            <p id="tableSubtitle">Run a scan to populate the table.</p>
+          </div>
+          <label class="check-control">
+            <input id="showAllToggle" type="checkbox" checked />
+            <span>Show unavailable and ineligible rows</span>
+          </label>
+        </div>
+
+        <div class="table-wrap">
+          <table>
+            <thead>
+              <tr>
+                <th>Rank</th>
+                <th>Symbol</th>
+                <th>Status</th>
+                <th>Current</th>
+                <th>Min Target</th>
+                <th>Avg Target</th>
+                <th>Max Target</th>
+                <th>Allocation</th>
+                <th>Target $</th>
+                <th>Contracts</th>
+                <th>Actual Used</th>
+                <th>CSP Strike</th>
+              </tr>
+            </thead>
+            <tbody id="resultBody">
+              <tr>
+                <td colspan="12" class="empty-cell">No scan has run yet.</td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+      </section>
+    </main>
+
+    <script src="/app.js"></script>
+  </body>
+</html>

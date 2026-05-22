@@ -1,0 +1,29 @@
+services:
+  app:
+    build: .
+    restart: unless-stopped
+    environment:
+      NODE_ENV: ${NODE_ENV:-production}
+      PORT: 5173
+      TRADINGVIEW_CACHE_TTL_MS: ${TRADINGVIEW_CACHE_TTL_MS:-900000}
+      TRADINGVIEW_CONCURRENCY: ${TRADINGVIEW_CONCURRENCY:-8}
+      TRADINGVIEW_REQUEST_TIMEOUT_MS: ${TRADINGVIEW_REQUEST_TIMEOUT_MS:-8000}
+
+  caddy:
+    image: caddy:2-alpine
+    restart: unless-stopped
+    ports:
+      - "80:80"
+      - "443:443"
+    environment:
+      PUBLIC_DOMAIN: ${PUBLIC_DOMAIN:-wheelstrategyscreener.com}
+    volumes:
+      - ./deploy/Caddyfile:/etc/caddy/Caddyfile:ro
+      - caddy-data:/data
+      - caddy-config:/config
+    depends_on:
+      - app
+
+volumes:
+  caddy-data:
+  caddy-config:

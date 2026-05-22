@@ -1,0 +1,15 @@
+{
+  "name": "wheel-strategy-options-screener",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Robinhood and TradingView wheel strategy screener with a local Chrome extension helper.",
+  "main": "src/server.js",
+  "scripts": {
+    "start": "node src/server.js",
+    "test": "node --test \"test/*.test.js\""
+  },
+  "engines": {
+    "node": ">=20"
+  },
+  "dependencies": {}
+}
