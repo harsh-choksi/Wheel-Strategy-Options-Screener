@@ -11,6 +11,21 @@ const REQUEST_HEADERS = {
   accept: "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8"
 };
 
+const SCANNER_FORECAST_COLUMNS = [
+  "rtc",
+  "close",
+  "currency",
+  "name",
+  "description",
+  "exchange",
+  "price_target_average",
+  "price_target_high",
+  "price_target_low",
+  "recommendation_buy",
+  "recommendation_hold",
+  "recommendation_sell"
+];
+
 function normalizeSymbolForTradingView(symbol) {
   return String(symbol || "")
     .trim()
@@ -139,7 +154,7 @@ async function fetchCurrentPrice(exchange, symbol) {
         types: []
       }
     },
-    columns: ["close", "currency", "name", "description", "exchange"]
+    columns: ["rtc", "close", "currency", "name", "description", "exchange"]
   };
 
   const response = await fetchWithTimeout("https://scanner.tradingview.com/america/scan", {
@@ -158,21 +173,113 @@ async function fetchCurrentPrice(exchange, symbol) {
   const payload = await response.json();
   const row = Array.isArray(payload.data) ? payload.data[0] : null;
   const values = Array.isArray(row?.d) ? row.d : [];
-  const close = values[0];
+  const currentPrice = Number.isFinite(values[0]) ? values[0] : values[1];
 
-  return Number.isFinite(close)
+  return Number.isFinite(currentPrice)
     ? {
-        currentPrice: close,
-        currency: values[1] || "USD",
-        description: values[3] || null
+        currentPrice,
+        currency: values[2] || "USD",
+        description: values[4] || null
       }
     : null;
+}
+
+async function fetchScannerForecast(exchange, symbol) {
+  const tvSymbol = normalizeSymbolForTradingView(symbol);
+  const body = {
+    symbols: {
+      tickers: [`${exchange}:${tvSymbol}`],
+      query: {
+        types: []
+      }
+    },
+    columns: SCANNER_FORECAST_COLUMNS
+  };
+
+  const response = await fetchWithTimeout("https://scanner.tradingview.com/america/scan", {
+    method: "POST",
+    headers: {
+      "content-type": "application/json",
+      "user-agent": REQUEST_HEADERS["user-agent"]
+    },
+    body: JSON.stringify(body)
+  });
+
+  if (!response.ok) {
+    return null;
+  }
+
+  const payload = await response.json();
+  const row = Array.isArray(payload.data) ? payload.data[0] : null;
+  const values = Array.isArray(row?.d) ? row.d : [];
+
+  if (!values.length) {
+    return null;
+  }
+
+  const [
+    realtimeCurrentPrice,
+    closePrice,
+    currency,
+    name,
+    description,
+    resolvedExchange,
+    averageTarget,
+    maxTarget,
+    minTarget
+  ] = values;
+  const currentPrice = Number.isFinite(realtimeCurrentPrice) ? realtimeCurrentPrice : closePrice;
+  const recommendationCount = values
+    .slice(9)
+    .filter(Number.isFinite)
+    .reduce((sum, value) => sum + value, 0);
+
+  return {
+    currentPrice: Number.isFinite(currentPrice) ? currentPrice : null,
+    currency: currency || "USD",
+    name: name || null,
+    description: description || null,
+    exchange: resolvedExchange || exchange,
+    averageTarget: Number.isFinite(averageTarget) ? averageTarget : null,
+    maxTarget: Number.isFinite(maxTarget) ? maxTarget : null,
+    minTarget: Number.isFinite(minTarget) ? minTarget : null,
+    analystCount: recommendationCount || null
+  };
+}
+
+function buildForecastRow(symbol, exchange, url, data, error = null) {
+  const currentPrice = data?.currentPrice ?? null;
+  const minTarget = data?.minTarget ?? null;
+
+  return {
+    symbol: String(symbol).toUpperCase(),
+    exchange,
+    url,
+    currentPrice,
+    minTarget,
+    averageTarget: data?.averageTarget ?? null,
+    maxTarget: data?.maxTarget ?? null,
+    analystCount: data?.analystCount ?? null,
+    eligible:
+      Number.isFinite(currentPrice) &&
+      Number.isFinite(minTarget) &&
+      minTarget > currentPrice,
+    status:
+      Number.isFinite(currentPrice) && Number.isFinite(minTarget)
+        ? "ok"
+        : "missing-data",
+    error:
+      error ||
+      (currentPrice === null
+        ? "TradingView forecast found, but current price was unavailable."
+        : null)
+  };
 }
 
 async function fetchForecastForSymbol(symbol, options = {}) {
   const cacheKey = `${String(symbol || "").trim().toUpperCase()}::${(options.exchanges || TRADINGVIEW_EXCHANGES).join(",")}`;
   const cached = forecastCache.get(cacheKey);
-  if (cached && Date.now() - cached.createdAt < CACHE_TTL_MS) {
+  if (!options.bypassCache && cached && Date.now() - cached.createdAt < CACHE_TTL_MS) {
     return { ...cached.value };
   }
 
@@ -194,6 +301,20 @@ async function fetchForecastForSymbolUncached(symbol, options = {}) {
     attempted.push(url);
 
     try {
+      const scannerForecast = await fetchScannerForecast(exchange, tvSymbol).catch((error) => {
+        attempted.push(`${exchange} scanner: ${error.message}`);
+        return null;
+      });
+
+      if (
+        scannerForecast &&
+        (Number.isFinite(scannerForecast.averageTarget) ||
+          Number.isFinite(scannerForecast.maxTarget) ||
+          Number.isFinite(scannerForecast.minTarget))
+      ) {
+        return buildForecastRow(symbol, scannerForecast.exchange || exchange, url, scannerForecast);
+      }
+
       const [forecastResponse, quote] = await Promise.all([
         fetchText(url),
         fetchCurrentPrice(exchange, tvSymbol).catch(() => null)
@@ -215,28 +336,13 @@ async function fetchForecastForSymbolUncached(symbol, options = {}) {
 
       const currentPrice = quote?.currentPrice ?? null;
 
-      return {
-        symbol: String(symbol).toUpperCase(),
-        exchange,
-        url,
+      return buildForecastRow(symbol, exchange, url, {
         currentPrice,
         minTarget: forecast.minTarget,
         averageTarget: forecast.averageTarget,
         maxTarget: forecast.maxTarget,
-        analystCount: forecast.analystCount,
-        eligible:
-          Number.isFinite(currentPrice) &&
-          Number.isFinite(forecast.minTarget) &&
-          forecast.minTarget > currentPrice,
-        status:
-          Number.isFinite(currentPrice) && Number.isFinite(forecast.minTarget)
-            ? "ok"
-            : "missing-data",
-        error:
-          currentPrice === null
-            ? "TradingView forecast found, but current price was unavailable."
-            : null
-      };
+        analystCount: forecast.analystCount
+      });
     } catch (error) {
       attempted.push(`${exchange}: ${error.message}`);
     }
@@ -264,5 +370,6 @@ module.exports = {
   parseForecastHtml,
   fetchForecastForSymbol,
   fetchForecastForSymbolUncached,
+  fetchScannerForecast,
   fetchCurrentPrice
 };

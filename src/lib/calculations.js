@@ -1,11 +1,3 @@
-function roundToNearestHalf(value) {
-  if (!Number.isFinite(value)) {
-    return null;
-  }
-
-  return Math.round(value * 2) / 2;
-}
-
 function calculateAllocationPercentages(count) {
   if (!Number.isInteger(count) || count <= 0) {
     return [];
@@ -15,20 +7,6 @@ function calculateAllocationPercentages(count) {
   const totalWeight = weights.reduce((sum, weight) => sum + weight, 0);
 
   return weights.map((weight) => (weight / totalWeight) * 100);
-}
-
-function calculateCspStrike(currentPrice, oppositeAllocationPercent, eligibleCount) {
-  if (
-    !Number.isFinite(currentPrice) ||
-    !Number.isFinite(oppositeAllocationPercent) ||
-    !Number.isInteger(eligibleCount) ||
-    eligibleCount <= 0
-  ) {
-    return null;
-  }
-
-  const bufferFactor = eligibleCount * (2 / 3) * (oppositeAllocationPercent / 100);
-  return roundToNearestHalf(currentPrice - bufferFactor);
 }
 
 function calculateContractAllocations(eligibleRows, portfolioValue) {
@@ -148,24 +126,16 @@ function prepareAllocatedRows(candidateRows, portfolioValue) {
   const allocatedRows = candidateRows.map((row, index) => {
     const rank = index + 1;
     const allocationPercent = percentages[index];
-    const cspAllocationPercent = percentages[percentages.length - index - 1];
     const allocationDollars = Number.isFinite(portfolioValue)
       ? (portfolioValue * allocationPercent) / 100
       : null;
-    const cspStrike = calculateCspStrike(
-      row.currentPrice,
-      cspAllocationPercent,
-      candidateRows.length
-    );
 
     return {
       ...row,
       used: true,
       rank,
       allocationPercent,
-      allocationDollars,
-      cspAllocationPercent,
-      cspStrike
+      allocationDollars
     };
   });
 
@@ -215,8 +185,9 @@ function applyAllocations(rows, portfolioValue) {
         rank: null,
         allocationPercent: null,
         allocationDollars: null,
-        cspAllocationPercent: null,
         cspStrike: null,
+        cspBid: null,
+        cspReturnPercent: null,
         contracts: null,
         collateralPerContract: null,
         actualCollateralDollars: null
@@ -234,8 +205,6 @@ function applyAllocations(rows, portfolioValue) {
       rank: null,
       allocationPercent: null,
       allocationDollars: null,
-      cspAllocationPercent: null,
-      cspStrike: null,
       contracts: 0,
       collateralPerContract: null,
       actualCollateralDollars: 0
@@ -244,9 +213,7 @@ function applyAllocations(rows, portfolioValue) {
 }
 
 module.exports = {
-  roundToNearestHalf,
   calculateAllocationPercentages,
-  calculateCspStrike,
   calculateContractAllocations,
   calculateUsedEligibleRows,
   applyAllocations

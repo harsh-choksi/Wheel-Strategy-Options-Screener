@@ -1,6 +1,7 @@
 const assert = require("node:assert/strict");
 const test = require("node:test");
 const {
+  fetchScannerForecast,
   normalizeSymbolForTradingView,
   parseForecastHtml,
   parseNumber
@@ -45,4 +46,59 @@ test("handles unavailable target estimates", () => {
   assert.equal(parsed.averageTarget, 12);
   assert.equal(parsed.maxTarget, null);
   assert.equal(parsed.minTarget, null);
+});
+
+test("maps TradingView scanner forecast columns", async () => {
+  const originalFetch = global.fetch;
+  global.fetch = async () => ({
+    ok: true,
+    status: 200,
+    json: async () => ({
+      totalCount: 1,
+      data: [
+        {
+          s: "NASDAQ:ONDS",
+          d: [9.96, 10.01, "USD", "ONDS", "Ondas Inc", "NASDAQ", 20.125, 25, 16, 9, 0, 0]
+        }
+      ]
+    })
+  });
+
+  try {
+    const forecast = await fetchScannerForecast("NASDAQ", "ONDS");
+
+    assert.equal(forecast.currentPrice, 9.96);
+    assert.equal(forecast.averageTarget, 20.125);
+    assert.equal(forecast.maxTarget, 25);
+    assert.equal(forecast.minTarget, 16);
+    assert.equal(forecast.analystCount, 9);
+  } finally {
+    global.fetch = originalFetch;
+  }
+});
+
+test("falls back to close when TradingView realtime current price is unavailable", async () => {
+  const originalFetch = global.fetch;
+  global.fetch = async () => ({
+    ok: true,
+    status: 200,
+    json: async () => ({
+      totalCount: 1,
+      data: [
+        {
+          s: "NASDAQ:ONDS",
+          d: [null, 10.01, "USD", "ONDS", "Ondas Inc", "NASDAQ", 20.125, 25, 16, 9, 0, 0]
+        }
+      ]
+    })
+  });
+
+  try {
+    const forecast = await fetchScannerForecast("NASDAQ", "ONDS");
+
+    assert.equal(forecast.currentPrice, 10.01);
+    assert.equal(forecast.minTarget, 16);
+  } finally {
+    global.fetch = originalFetch;
+  }
 });

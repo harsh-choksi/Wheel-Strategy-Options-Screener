@@ -3,6 +3,10 @@ const state = {
   screenerId: "safe",
   mode: "mock",
   lastResult: null,
+  lastForecastResult: null,
+  lastOptionQuotesBySymbol: null,
+  lastOptionDiagnosticsBySymbol: null,
+  minCspReturnPercent: 2,
   showAll: true,
   helper: {
     installed: false,
@@ -15,6 +19,8 @@ const elements = {
   sessionPill: document.querySelector("#sessionPill"),
   screenerTabs: document.querySelector("#screenerTabs"),
   portfolioInput: document.querySelector("#portfolioInput"),
+  weeklyReturnInput: document.querySelector("#weeklyReturnInput"),
+  yearlyReturnInput: document.querySelector("#yearlyReturnInput"),
   runButton: document.querySelector("#runButton"),
   exportButton: document.querySelector("#exportButton"),
   notice: document.querySelector("#notice"),
@@ -31,7 +37,10 @@ const elements = {
   connectionActions: document.querySelector("#connectionActions"),
   installHelperLink: document.querySelector("#installHelperLink"),
   connectButton: document.querySelector("#connectButton"),
-  sourceModes: document.querySelector("#sourceModes")
+  sourceModes: document.querySelector("#sourceModes"),
+  onboardingDialog: document.querySelector("#onboardingDialog"),
+  onboardingCloseButton: document.querySelector("#onboardingCloseButton"),
+  onboardingMockButton: document.querySelector("#onboardingMockButton")
 };
 
 const moneyFormatter = new Intl.NumberFormat("en-US", {
@@ -43,11 +52,81 @@ const moneyFormatter = new Intl.NumberFormat("en-US", {
 const percentFormatter = new Intl.NumberFormat("en-US", {
   maximumFractionDigits: 2
 });
+const TABLE_LABELS = [
+  "Rank",
+  "Symbol",
+  "Status",
+  "Current",
+  "Min",
+  "Avg",
+  "Max",
+  "Allocation",
+  "Target",
+  "Strike",
+  "Bid",
+  "Return",
+  "Contracts",
+  "Used"
+];
 const EXTENSION_REQUEST_TYPE = "WHEEL_SCREENER_EXTENSION_REQUEST";
 const EXTENSION_RESPONSE_TYPE = "WHEEL_SCREENER_EXTENSION_RESPONSE";
 const EXTENSION_READY_TYPE = "WHEEL_SCREENER_EXTENSION_READY";
+const TRADING_WEEKS_PER_YEAR = 52;
+const DEFAULT_WEEKLY_RETURN_PERCENT = 2;
 let extensionRequestId = 0;
 let extensionDetectionTimer = null;
+let portfolioReallocationTimer = null;
+let portfolioReallocationId = 0;
+let returnRecalculationTimer = null;
+let returnRecalculationId = 0;
+let syncingReturnInputs = false;
+const ONBOARDING_SEEN_KEY = "wheel-screener-onboarding-v1";
+
+function rememberOnboardingDismissed() {
+  try {
+    window.localStorage.setItem(ONBOARDING_SEEN_KEY, "true");
+  } catch {
+    // The guide remains available when browser storage is disabled.
+  }
+}
+
+function dismissOnboarding() {
+  rememberOnboardingDismissed();
+
+  if (elements.onboardingDialog.open) {
+    elements.onboardingDialog.close();
+  }
+}
+
+function initOnboarding() {
+  let hasSeenOnboarding = false;
+
+  try {
+    hasSeenOnboarding = window.localStorage.getItem(ONBOARDING_SEEN_KEY) === "true";
+  } catch {
+    // Show the walkthrough when browser storage is unavailable.
+  }
+
+  elements.onboardingCloseButton.addEventListener("click", dismissOnboarding);
+  elements.onboardingMockButton.addEventListener("click", () => {
+    setMode("mock");
+    dismissOnboarding();
+  });
+  elements.onboardingDialog.addEventListener("cancel", dismissOnboarding);
+  elements.onboardingDialog.addEventListener("click", (event) => {
+    if (event.target === elements.onboardingDialog) {
+      dismissOnboarding();
+    }
+  });
+
+  for (const link of elements.onboardingDialog.querySelectorAll("[data-onboarding-dismiss]")) {
+    link.addEventListener("click", rememberOnboardingDismissed);
+  }
+
+  if (!hasSeenOnboarding) {
+    elements.onboardingDialog.showModal();
+  }
+}
 
 function formatMoney(value) {
   return Number.isFinite(value) ? moneyFormatter.format(value) : "--";
@@ -59,6 +138,63 @@ function formatNumber(value) {
 
 function formatPercent(value) {
   return Number.isFinite(value) ? `${percentFormatter.format(value)}%` : "--";
+}
+
+function weeklyToYearlyPercent(weeklyPercent) {
+  return (Math.pow(1 + weeklyPercent / 100, TRADING_WEEKS_PER_YEAR) - 1) * 100;
+}
+
+function yearlyToWeeklyPercent(yearlyPercent) {
+  return (Math.pow(1 + yearlyPercent / 100, 1 / TRADING_WEEKS_PER_YEAR) - 1) * 100;
+}
+
+function formatReturnInput(value) {
+  if (!Number.isFinite(value)) {
+    return "";
+  }
+
+  return Number.parseFloat(value.toFixed(4)).toString();
+}
+
+function parsePercentInput(input) {
+  const value = Number.parseFloat(input.value);
+  return Number.isFinite(value) && value >= 0 ? value : null;
+}
+
+function minCspReturnDecimal() {
+  return state.minCspReturnPercent / 100;
+}
+
+function syncReturnInputsFromWeekly(weeklyPercent, activeInput) {
+  if (!Number.isFinite(weeklyPercent) || weeklyPercent < 0) {
+    return;
+  }
+
+  syncingReturnInputs = true;
+  if (activeInput !== elements.weeklyReturnInput) {
+    elements.weeklyReturnInput.value = formatReturnInput(weeklyPercent);
+  }
+  if (activeInput !== elements.yearlyReturnInput) {
+    elements.yearlyReturnInput.value = formatReturnInput(weeklyToYearlyPercent(weeklyPercent));
+  }
+  syncingReturnInputs = false;
+}
+
+function resetReturnInputs() {
+  state.minCspReturnPercent = DEFAULT_WEEKLY_RETURN_PERCENT;
+  syncReturnInputsFromWeekly(DEFAULT_WEEKLY_RETURN_PERCENT, null);
+}
+
+function commitReturnTargetFromInputs() {
+  const weeklyPercent = parsePercentInput(elements.weeklyReturnInput);
+  if (weeklyPercent === null) {
+    resetReturnInputs();
+    return minCspReturnDecimal();
+  }
+
+  state.minCspReturnPercent = weeklyPercent;
+  syncReturnInputsFromWeekly(weeklyPercent, elements.weeklyReturnInput);
+  return minCspReturnDecimal();
 }
 
 function escapeHtml(value) {
@@ -103,6 +239,8 @@ function requestExtension(action, payload = {}, timeoutMs = 10000) {
         new Error(
           action === "extractScreener"
             ? "Chrome helper timed out while reading Robinhood. Keep the Robinhood tab open, then try again."
+            : action === "extractPutOptionQuotes"
+              ? "Chrome helper timed out while checking Robinhood option chains. Keep the Robinhood tab open, then try again."
             : "Chrome extension helper is not installed or did not respond."
         )
       );
@@ -287,6 +425,10 @@ function renderSession(session) {
 }
 
 function rowStatus(row) {
+  if (row.status === "skip") {
+    return "skip";
+  }
+
   if (row.eligible && row.used === false) {
     return "unused";
   }
@@ -307,16 +449,18 @@ function renderRows() {
 
   if (!result) {
     elements.resultBody.innerHTML =
-      '<tr><td colspan="12" class="empty-cell">No scan has run yet.</td></tr>';
+      '<tr><td colspan="14" class="empty-cell">No scan has run yet.</td></tr>';
     elements.exportButton.disabled = true;
     return;
   }
 
-  const rows = state.showAll ? result.rows : result.rows.filter((row) => row.eligible);
+  const rows = state.showAll
+    ? result.rows
+    : result.rows.filter((row) => row.eligible || rowStatus(row) === "skip");
 
   if (rows.length === 0) {
     elements.resultBody.innerHTML =
-      '<tr><td colspan="12" class="empty-cell">No rows match the current filter.</td></tr>';
+      '<tr><td colspan="14" class="empty-cell">No rows match the current filter.</td></tr>';
     elements.exportButton.disabled = true;
     return;
   }
@@ -330,6 +474,8 @@ function renderRows() {
           ? "Eligible"
           : status === "unused"
             ? "Unused"
+            : status === "skip"
+              ? "SKIP"
             : status === "ineligible"
               ? "Below min"
               : "Unavailable";
@@ -340,18 +486,20 @@ function renderRows() {
 
       return `
         <tr title="${escapeHtml(row.error || "")}">
-          <td>${row.rank ?? "--"}</td>
-          <td>${symbolCell}</td>
-          <td><span class="status ${status}">${label}</span></td>
-          <td>${formatMoney(row.currentPrice)}</td>
-          <td>${formatMoney(row.minTarget)}</td>
-          <td>${formatMoney(row.averageTarget)}</td>
-          <td>${formatMoney(row.maxTarget)}</td>
-          <td>${formatPercent(row.allocationPercent)}</td>
-          <td>${formatMoney(row.allocationDollars)}</td>
-          <td>${Number.isFinite(row.contracts) ? row.contracts : "--"}</td>
-          <td>${formatMoney(row.actualCollateralDollars)}</td>
-          <td>${formatNumber(row.cspStrike)}</td>
+          <td data-label="${TABLE_LABELS[0]}">${row.rank ?? "--"}</td>
+          <td data-label="${TABLE_LABELS[1]}">${symbolCell}</td>
+          <td data-label="${TABLE_LABELS[2]}"><span class="status ${status}">${label}</span></td>
+          <td data-label="${TABLE_LABELS[3]}">${formatMoney(row.currentPrice)}</td>
+          <td data-label="${TABLE_LABELS[4]}">${formatMoney(row.minTarget)}</td>
+          <td data-label="${TABLE_LABELS[5]}">${formatMoney(row.averageTarget)}</td>
+          <td data-label="${TABLE_LABELS[6]}">${formatMoney(row.maxTarget)}</td>
+          <td data-label="${TABLE_LABELS[7]}">${formatPercent(row.allocationPercent)}</td>
+          <td data-label="${TABLE_LABELS[8]}">${formatMoney(row.allocationDollars)}</td>
+          <td class="highlight-column" data-label="${TABLE_LABELS[9]}">${formatNumber(row.cspStrike)}</td>
+          <td class="highlight-column" data-label="${TABLE_LABELS[10]}">${formatMoney(row.cspBid)}</td>
+          <td data-label="${TABLE_LABELS[11]}">${formatPercent(row.cspReturnPercent)}</td>
+          <td class="highlight-column" data-label="${TABLE_LABELS[12]}">${Number.isFinite(row.contracts) ? row.contracts : "--"}</td>
+          <td data-label="${TABLE_LABELS[13]}">${formatMoney(row.actualCollateralDollars)}</td>
         </tr>
       `;
     })
@@ -375,13 +523,172 @@ function renderSummary(result) {
   elements.tableSubtitle.textContent = `${result.source} source - ${result.symbols.length} symbols scanned`;
 }
 
+function clearPortfolioReallocationTimer() {
+  if (portfolioReallocationTimer) {
+    clearTimeout(portfolioReallocationTimer);
+    portfolioReallocationTimer = null;
+  }
+}
+
+function clearReturnRecalculationTimer() {
+  if (returnRecalculationTimer) {
+    clearTimeout(returnRecalculationTimer);
+    returnRecalculationTimer = null;
+  }
+}
+
+function hasCachedFinalizationInputs() {
+  return Boolean(state.lastForecastResult);
+}
+
+async function finalizeFromCachedScan() {
+  if (!hasCachedFinalizationInputs()) {
+    return;
+  }
+
+  const portfolioValue = Number.parseFloat(elements.portfolioInput.value);
+  const requestId = ++returnRecalculationId;
+
+  try {
+    const result = await fetchJson("/api/finalize", {
+      method: "POST",
+      headers: {
+        "content-type": "application/json"
+      },
+      body: JSON.stringify({
+        portfolioValue,
+        result: state.lastForecastResult,
+        optionQuotesBySymbol: state.lastOptionQuotesBySymbol,
+        optionDiagnosticsBySymbol: state.lastOptionDiagnosticsBySymbol,
+        minCspReturnDecimal: minCspReturnDecimal()
+      })
+    });
+
+    if (requestId !== returnRecalculationId) {
+      return;
+    }
+
+    state.lastResult = result;
+    renderSummary(result);
+    renderRows();
+    setNotice("");
+  } catch (error) {
+    if (requestId === returnRecalculationId) {
+      setNotice(error.message, "error");
+    }
+  }
+}
+
+async function reallocatePortfolio() {
+  if (!state.lastResult) {
+    return;
+  }
+
+  const portfolioValue = Number.parseFloat(elements.portfolioInput.value);
+  const requestId = ++portfolioReallocationId;
+
+  try {
+    const result = await fetchJson("/api/reallocate", {
+      method: "POST",
+      headers: {
+        "content-type": "application/json"
+      },
+      body: JSON.stringify({
+        portfolioValue,
+        result: state.lastResult
+      })
+    });
+
+    if (requestId !== portfolioReallocationId) {
+      return;
+    }
+
+    state.lastResult = result;
+    renderSummary(result);
+    renderRows();
+    setNotice("");
+  } catch (error) {
+    if (requestId === portfolioReallocationId) {
+      setNotice(error.message, "error");
+    }
+  }
+}
+
+function schedulePortfolioReallocation() {
+  clearPortfolioReallocationTimer();
+
+  if (!state.lastResult) {
+    return;
+  }
+
+  portfolioReallocationTimer = setTimeout(() => {
+    portfolioReallocationTimer = null;
+    reallocatePortfolio();
+  }, 250);
+}
+
+function scheduleReturnRecalculation() {
+  clearReturnRecalculationTimer();
+
+  if (!hasCachedFinalizationInputs()) {
+    return;
+  }
+
+  returnRecalculationTimer = setTimeout(() => {
+    returnRecalculationTimer = null;
+    finalizeFromCachedScan();
+  }, 250);
+}
+
+function handleWeeklyReturnInput() {
+  if (syncingReturnInputs) {
+    return;
+  }
+
+  const weeklyPercent = parsePercentInput(elements.weeklyReturnInput);
+  if (weeklyPercent === null) {
+    return;
+  }
+
+  state.minCspReturnPercent = weeklyPercent;
+  syncReturnInputsFromWeekly(weeklyPercent, elements.weeklyReturnInput);
+  scheduleReturnRecalculation();
+}
+
+function handleYearlyReturnInput() {
+  if (syncingReturnInputs) {
+    return;
+  }
+
+  const yearlyPercent = parsePercentInput(elements.yearlyReturnInput);
+  if (yearlyPercent === null) {
+    return;
+  }
+
+  const weeklyPercent = yearlyToWeeklyPercent(yearlyPercent);
+  state.minCspReturnPercent = weeklyPercent;
+  syncReturnInputsFromWeekly(weeklyPercent, elements.yearlyReturnInput);
+  scheduleReturnRecalculation();
+}
+
+function restoreReturnInputIfInvalid(event) {
+  if (parsePercentInput(event.currentTarget) === null) {
+    resetReturnInputs();
+  }
+}
+
 async function refreshSession() {
   const session = await fetchJson("/api/session");
   renderSession(session);
 }
 
 async function runScan() {
+  clearPortfolioReallocationTimer();
+  clearReturnRecalculationTimer();
+  portfolioReallocationId += 1;
+  returnRecalculationId += 1;
   const portfolioValue = Number.parseFloat(elements.portfolioInput.value);
+  const selectedReturn = commitReturnTargetFromInputs();
 
   if (state.mode === "live" && !activeConnection()) {
     setNotice("Connect Robinhood and finish login before scanning.", "error");
@@ -392,14 +699,18 @@ async function runScan() {
   elements.runButton.textContent = "Scanning...";
   setNotice(
     state.mode === "live" && state.helper.installed
-      ? "Asking the Chrome helper for the selected Robinhood list, then scanning TradingView."
+      ? "Reading the selected Robinhood list, then checking TradingView and put chains."
       : state.mode === "live"
         ? "Extracting the selected Robinhood screener list and scanning TradingView."
-      : "Mock mode uses built-in symbols and live TradingView data."
+        : "Mock mode uses built-in symbols and sample option quotes with live TradingView data."
   );
 
   try {
     let helperSymbols = null;
+    let result = null;
+    let forecastResult = null;
+    let optionQuotesBySymbol = null;
+    let optionDiagnosticsBySymbol = null;
 
     if (state.mode === "live" && state.helper.installed) {
       const stillReady = await refreshExtensionHelper({ silent: false });
@@ -421,23 +732,88 @@ async function runScan() {
       if (helperSymbols.length === 0) {
         throw new Error("The Chrome helper did not find any symbols in that Robinhood list.");
       }
+
+      setNotice(`Scanning TradingView forecasts for ${helperSymbols.length} Robinhood symbols.`);
+      forecastResult = await fetchJson("/api/forecast", {
+        method: "POST",
+        headers: {
+          "content-type": "application/json"
+        },
+        body: JSON.stringify({
+          portfolioValue,
+          screenerId: state.screenerId,
+          mode: state.mode,
+          symbols: helperSymbols,
+          source: "robinhood",
+          minCspReturnDecimal: selectedReturn
+        })
+      });
+
+      const optionRequests = Array.isArray(forecastResult.optionRequests)
+        ? forecastResult.optionRequests
+        : [];
+      optionQuotesBySymbol = {};
+      optionDiagnosticsBySymbol = {};
+
+      if (optionRequests.length > 0) {
+        setNotice(
+          `Checking Robinhood sell-put chains for ${optionRequests.length} TradingView-eligible symbols.`
+        );
+        const quoteResult = await requestExtension(
+          "extractPutOptionQuotes",
+          {
+            requests: optionRequests
+          },
+          Math.max(300000, optionRequests.length * 45000)
+        );
+        optionQuotesBySymbol = quoteResult.optionQuotesBySymbol || {};
+        optionDiagnosticsBySymbol = quoteResult.optionDiagnosticsBySymbol || {};
+      }
+
+      result = await fetchJson("/api/finalize", {
+        method: "POST",
+        headers: {
+          "content-type": "application/json"
+        },
+        body: JSON.stringify({
+          portfolioValue,
+          result: forecastResult,
+          optionQuotesBySymbol,
+          optionDiagnosticsBySymbol,
+          minCspReturnDecimal: selectedReturn
+        })
+      });
+    } else {
+      forecastResult = await fetchJson("/api/forecast", {
+        method: "POST",
+        headers: {
+          "content-type": "application/json"
+        },
+        body: JSON.stringify({
+          portfolioValue,
+          screenerId: state.screenerId,
+          mode: state.mode,
+          minCspReturnDecimal: selectedReturn
+        })
+      });
+
+      result = await fetchJson("/api/finalize", {
+        method: "POST",
+        headers: {
+          "content-type": "application/json"
+        },
+        body: JSON.stringify({
+          portfolioValue,
+          result: forecastResult,
+          minCspReturnDecimal: selectedReturn
+        })
+      });
     }
 
-    const result = await fetchJson("/api/run", {
-      method: "POST",
-      headers: {
-        "content-type": "application/json"
-      },
-      body: JSON.stringify({
-        portfolioValue,
-        screenerId: state.screenerId,
-        mode: state.mode,
-        symbols: helperSymbols,
-        source: helperSymbols ? "robinhood" : undefined
-      })
-    });
-
     state.lastResult = result;
+    state.lastForecastResult = forecastResult;
+    state.lastOptionQuotesBySymbol = optionQuotesBySymbol;
+    state.lastOptionDiagnosticsBySymbol = optionDiagnosticsBySymbol;
     renderSummary(result);
     renderRows();
     setNotice("");
@@ -490,9 +866,11 @@ function exportCsv() {
     "Max Target",
     "Allocation %",
     "Target $",
+    "CSP Strike",
+    "Bid",
+    "Return %",
     "Contracts",
-    "Actual Used",
-    "CSP Strike"
+    "Actual Used"
   ];
   const rows = state.lastResult.rows.map((row) => [
     row.rank ?? "",
@@ -504,9 +882,11 @@ function exportCsv() {
     row.maxTarget ?? "",
     row.allocationPercent ?? "",
     row.allocationDollars ?? "",
+    row.cspStrike ?? "",
+    row.cspBid ?? "",
+    row.cspReturnPercent ?? "",
     row.contracts ?? "",
-    row.actualCollateralDollars ?? "",
-    row.cspStrike ?? ""
+    row.actualCollateralDollars ?? ""
   ]);
   const csv = [headers, ...rows].map((row) => row.map(escapeCsv).join(",")).join("\n");
   const blob = new Blob([csv], { type: "text/csv;charset=utf-8" });
@@ -529,15 +909,33 @@ function bindModeButtons() {
 }
 
 async function init() {
+  initOnboarding();
   bindExtensionReadyListener();
   bindModeButtons();
   elements.runButton.addEventListener("click", runScan);
   elements.exportButton.addEventListener("click", exportCsv);
   elements.connectButton.addEventListener("click", connectRobinhood);
+  elements.portfolioInput.addEventListener("input", schedulePortfolioReallocation);
+  elements.portfolioInput.addEventListener("change", schedulePortfolioReallocation);
+  elements.weeklyReturnInput.addEventListener("input", handleWeeklyReturnInput);
+  elements.yearlyReturnInput.addEventListener("input", handleYearlyReturnInput);
+  elements.weeklyReturnInput.addEventListener("change", restoreReturnInputIfInvalid);
+  elements.yearlyReturnInput.addEventListener("change", restoreReturnInputIfInvalid);
+  window.addEventListener("pageshow", () => {
+    if (!state.lastResult) {
+      resetReturnInputs();
+    }
+  });
   elements.showAllToggle.addEventListener("change", () => {
     state.showAll = elements.showAllToggle.checked;
     renderRows();
   });
+  resetReturnInputs();
+  setTimeout(() => {
+    if (!state.lastResult) {
+      resetReturnInputs();
+    }
+  }, 0);
 
   const [screeners, session] = await Promise.all([
     fetchJson("/api/screeners"),

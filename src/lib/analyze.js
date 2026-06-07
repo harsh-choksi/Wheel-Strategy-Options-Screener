@@ -1,6 +1,12 @@
 const { SCREENERS } = require("../config");
 const { applyAllocations } = require("./calculations");
 const { getMockSymbols } = require("./mockSymbols");
+const {
+  applyOptionSelections,
+  buildMockQuotesBySymbol,
+  normalizeMinReturnDecimal,
+  optionRequestsForRows
+} = require("./options");
 const { fetchForecastForSymbol } = require("./tradingview");
 
 const FORECAST_CONCURRENCY = Number.parseInt(
@@ -51,13 +57,14 @@ async function getSymbolsForScreener(screener, mode, explicitSymbols, explicitSo
   throw new Error("Live Robinhood scans require symbols from the Chrome helper.");
 }
 
-async function analyzeScreener({
+async function buildForecastResult({
   screenerId,
   mode,
   portfolioValue,
   symbols,
   source,
-  forecastFetcher = fetchForecastForSymbol
+  forecastFetcher = fetchForecastForSymbol,
+  refreshMarketData = false
 }) {
   const screener = getScreenerById(screenerId);
   const normalizedMode = mode === "live" ? "live" : "mock";
@@ -78,15 +85,19 @@ async function analyzeScreener({
   ];
 
   const rows = await mapWithConcurrency(uniqueSymbols, FORECAST_CONCURRENCY, async (symbol, index) => {
-    const result = await forecastFetcher(symbol);
+    const result = await forecastFetcher(symbol, {
+      bypassCache: refreshMarketData
+    });
     return {
       order: index + 1,
-      ...result
+      ...result,
+      forecastEligible: Boolean(result.eligible),
+      eligible: false,
+      cspStrike: null,
+      cspBid: null,
+      cspReturnPercent: null
     };
   });
-
-  const allocatedRows = applyAllocations(rows, portfolio);
-  const eligibleCount = allocatedRows.filter((row) => row.eligible).length;
 
   return {
     generatedAt: new Date().toISOString(),
@@ -95,14 +106,80 @@ async function analyzeScreener({
     screener,
     portfolioValue: portfolio,
     symbols: uniqueSymbols,
-    eligibleCount,
-    rows: allocatedRows
+    eligibleCount: 0,
+    rows
+  };
+}
+
+function finalizeAnalyzedResult(
+  result,
+  portfolioValue,
+  optionQuotesBySymbol,
+  optionDiagnosticsBySymbol = {},
+  minCspReturnDecimal
+) {
+  if (!result || !Array.isArray(result.rows)) {
+    throw new Error("A forecast scan result is required for option finalization.");
+  }
+
+  const portfolio = Number.isFinite(portfolioValue) ? portfolioValue : 0;
+  const minimumReturn = normalizeMinReturnDecimal(minCspReturnDecimal);
+  const quotesBySymbol =
+    optionQuotesBySymbol ||
+    (result.mode === "mock" ? buildMockQuotesBySymbol(result.rows) : {});
+  const rowsWithOptions = applyOptionSelections(
+    result.rows,
+    quotesBySymbol,
+    minimumReturn,
+    optionDiagnosticsBySymbol
+  );
+  const rows = applyAllocations(rowsWithOptions, portfolio);
+
+  return {
+    ...result,
+    portfolioValue: portfolio,
+    minCspReturnDecimal: minimumReturn,
+    minCspReturnPercent: minimumReturn * 100,
+    eligibleCount: rows.filter((row) => row.eligible).length,
+    rows
+  };
+}
+
+async function analyzeScreener(args) {
+  const forecastResult = await buildForecastResult(args);
+  return finalizeAnalyzedResult(
+    forecastResult,
+    args.portfolioValue,
+    args.optionQuotesBySymbol ||
+      (forecastResult.mode === "mock" ? buildMockQuotesBySymbol(forecastResult.rows) : {}),
+    args.optionDiagnosticsBySymbol || {},
+    args.minCspReturnDecimal
+  );
+}
+
+function reallocateAnalyzedResult(result, portfolioValue) {
+  if (!result || !Array.isArray(result.rows)) {
+    throw new Error("A previous scan result is required for reallocation.");
+  }
+
+  const portfolio = Number.isFinite(portfolioValue) ? portfolioValue : 0;
+  const rows = applyAllocations(result.rows, portfolio);
+
+  return {
+    ...result,
+    portfolioValue: portfolio,
+    eligibleCount: rows.filter((row) => row.eligible).length,
+    rows
   };
 }
 
 module.exports = {
   analyzeScreener,
+  buildForecastResult,
+  finalizeAnalyzedResult,
   getScreenerById,
   getSymbolsForScreener,
-  mapWithConcurrency
+  mapWithConcurrency,
+  optionRequestsForRows,
+  reallocateAnalyzedResult
 };

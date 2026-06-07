@@ -2,7 +2,14 @@ const fs = require("node:fs");
 const http = require("node:http");
 const path = require("node:path");
 const { DEFAULT_PORT, IS_PRODUCTION, SCREENERS } = require("./config");
-const { analyzeScreener, getScreenerById } = require("./lib/analyze");
+const {
+  analyzeScreener,
+  buildForecastResult,
+  finalizeAnalyzedResult,
+  getScreenerById,
+  optionRequestsForRows,
+  reallocateAnalyzedResult
+} = require("./lib/analyze");
 const { sendJson } = require("./lib/httpUtils");
 const { createRateLimiter } = require("./lib/rateLimit");
 const { buildZipFromDirectory } = require("./lib/zip");
@@ -15,6 +22,8 @@ const MIME_TYPES = {
   ".css": "text/css; charset=utf-8",
   ".js": "application/javascript; charset=utf-8",
   ".json": "application/json; charset=utf-8",
+  ".ico": "image/x-icon",
+  ".png": "image/png",
   ".svg": "image/svg+xml"
 };
 
@@ -66,7 +75,7 @@ async function readJsonBody(req) {
 
   for await (const chunk of req) {
     body += chunk;
-    if (body.length > 1_000_000) {
+    if (body.length > 5_000_000) {
       throw new Error("Request body is too large.");
     }
   }
@@ -108,6 +117,20 @@ function normalizeExplicitSymbols(symbols) {
     .filter(Boolean);
 }
 
+function parseMinCspReturnDecimal(body) {
+  const explicitDecimal = Number.parseFloat(body?.minCspReturnDecimal);
+  if (Number.isFinite(explicitDecimal) && explicitDecimal >= 0) {
+    return explicitDecimal;
+  }
+
+  const explicitPercent = Number.parseFloat(body?.minCspReturnPercent);
+  if (Number.isFinite(explicitPercent) && explicitPercent >= 0) {
+    return explicitPercent / 100;
+  }
+
+  return undefined;
+}
+
 function createAppServer({ forecastFetcher } = {}) {
   const runLimiter = createRateLimiter({ windowMs: 60 * 1000, max: 12 });
 
@@ -130,6 +153,61 @@ function createAppServer({ forecastFetcher } = {}) {
     }
 
     if (req.method === "POST" && requestUrl.pathname === "/api/run") {
+      const limit = runLimiter(clientIp(req));
+      if (!limit.allowed) {
+        sendJson(res, 429, {
+          error: "Too many scans. Try again shortly."
+        });
+        return;
+      }
+
+      const body = await readJsonBody(req);
+      const portfolioValue = Number.parseFloat(body.portfolioValue);
+      const minCspReturnDecimal = parseMinCspReturnDecimal(body);
+      const mode = body.mode === "live" ? "live" : "mock";
+      const explicitSymbols = normalizeExplicitSymbols(body.symbols);
+      let symbols;
+      let source;
+
+      if (mode === "live") {
+        const screener = getScreenerById(body.screenerId);
+
+        if (!explicitSymbols) {
+          sendJson(res, 422, {
+            error: "Robinhood source requires the Chrome helper."
+          });
+          return;
+        }
+
+        symbols = explicitSymbols;
+        source = "robinhood";
+
+        if (symbols.length === 0) {
+          sendJson(res, 422, {
+            error: `No stock symbols were found in "${screener.name}".`
+          });
+          return;
+        }
+      }
+
+      const result = await analyzeScreener({
+        screenerId: body.screenerId,
+        mode,
+        portfolioValue,
+        symbols,
+        source,
+        forecastFetcher,
+        refreshMarketData: true,
+        optionQuotesBySymbol: body.optionQuotesBySymbol,
+        optionDiagnosticsBySymbol: body.optionDiagnosticsBySymbol,
+        minCspReturnDecimal
+      });
+
+      sendJson(res, 200, result);
+      return;
+    }
+
+    if (req.method === "POST" && requestUrl.pathname === "/api/forecast") {
       const limit = runLimiter(clientIp(req));
       if (!limit.allowed) {
         sendJson(res, 429, {
@@ -166,14 +244,47 @@ function createAppServer({ forecastFetcher } = {}) {
         }
       }
 
-      const result = await analyzeScreener({
+      const result = await buildForecastResult({
         screenerId: body.screenerId,
         mode,
         portfolioValue,
         symbols,
         source,
-        forecastFetcher
+        forecastFetcher,
+        refreshMarketData: true
       });
+
+      sendJson(res, 200, {
+        ...result,
+        optionRequests: optionRequestsForRows(result.rows)
+      });
+      return;
+    }
+
+    if (req.method === "POST" && requestUrl.pathname === "/api/finalize") {
+      const body = await readJsonBody(req);
+      const portfolioValue = Number.parseFloat(body.portfolioValue);
+      const minCspReturnDecimal = parseMinCspReturnDecimal(body);
+      const optionQuotesBySymbol =
+        body.optionQuotesBySymbol && typeof body.optionQuotesBySymbol === "object"
+          ? body.optionQuotesBySymbol
+          : undefined;
+      const result = finalizeAnalyzedResult(
+        body.result,
+        portfolioValue,
+        optionQuotesBySymbol,
+        body.optionDiagnosticsBySymbol || {},
+        minCspReturnDecimal
+      );
+
+      sendJson(res, 200, result);
+      return;
+    }
+
+    if (req.method === "POST" && requestUrl.pathname === "/api/reallocate") {
+      const body = await readJsonBody(req);
+      const portfolioValue = Number.parseFloat(body.portfolioValue);
+      const result = reallocateAnalyzedResult(body.result, portfolioValue);
 
       sendJson(res, 200, result);
       return;

@@ -7,10 +7,11 @@
       name="description"
       content="Robinhood list and TradingView forecast dashboard for wheel strategy screening."
     />
-    <title>Wheel Strategy Options Screener</title>
-    <link rel="icon" href="/favicon-32.png" sizes="32x32" type="image/png" />
-    <link rel="icon" href="/favicon-16.png" sizes="16x16" type="image/png" />
-    <link rel="apple-touch-icon" href="/apple-touch-icon.png" />
+    <title>Wheel Strategy Options Screener (EOW)</title>
+    <link rel="icon" href="/favicon.ico?v=0.2.5" sizes="any" />
+    <link rel="icon" href="/favicon-32.png?v=0.2.5" sizes="32x32" type="image/png" />
+    <link rel="icon" href="/favicon-16.png?v=0.2.5" sizes="16x16" type="image/png" />
+    <link rel="apple-touch-icon" href="/apple-touch-icon.png?v=0.2.5" />
     <link rel="stylesheet" href="/styles.css" />
   </head>
   <body>
@@ -18,9 +19,12 @@
       <header class="topbar">
         <div>
           <p class="eyebrow">Robinhood + TradingView</p>
-          <h1>Wheel Strategy Options Screener</h1>
+          <h1>Wheel Strategy Options Screener (EOW)</h1>
         </div>
-        <div class="session-pill" id="sessionPill" aria-live="polite">Checking session...</div>
+        <div class="topbar-actions">
+          <a class="secondary-button guide-link-button" href="/guide.html">Setup Guide</a>
+          <div class="session-pill" id="sessionPill" aria-live="polite">Checking session...</div>
+        </div>
       </header>
 
       <section class="connection-band" aria-label="Robinhood connection">
@@ -39,7 +43,8 @@
           </div>
         </div>
         <p class="disclosure">
-          Chrome helper reads list symbols locally. No password or Robinhood cookies are sent to this site.
+          Chrome helper reads list symbols locally. No Robinhood password or MFA code is sent to this site.
+          <a class="text-link" href="/guide.html">Need setup help?</a>
         </p>
       </section>
 
@@ -48,6 +53,35 @@
           <span>Portfolio value</span>
           <input id="portfolioInput" type="number" min="0" step="100" value="10000" />
         </label>
+
+        <div class="field return-field" role="group" aria-label="CSP return target">
+          <div class="return-input-grid">
+            <label class="mini-field">
+              <span>Weekly %</span>
+              <input
+                id="weeklyReturnInput"
+                type="number"
+                min="0"
+                step="0.01"
+                value="2"
+                inputmode="decimal"
+                autocomplete="off"
+              />
+            </label>
+            <label class="mini-field">
+              <span>Yearly %</span>
+              <input
+                id="yearlyReturnInput"
+                type="number"
+                min="0"
+                step="0.01"
+                value="180.0328"
+                inputmode="decimal"
+                autocomplete="off"
+              />
+            </label>
+          </div>
+        </div>
 
         <div class="field">
           <span>Screener</span>
@@ -107,25 +141,66 @@
                 <th>Symbol</th>
                 <th>Status</th>
                 <th>Current</th>
-                <th>Min Target</th>
-                <th>Avg Target</th>
-                <th>Max Target</th>
+                <th>Min</th>
+                <th>Avg</th>
+                <th>Max</th>
                 <th>Allocation</th>
-                <th>Target $</th>
-                <th>Contracts</th>
-                <th>Actual Used</th>
-                <th>CSP Strike</th>
+                <th>Target</th>
+                <th class="highlight-column">Strike</th>
+                <th class="highlight-column">Bid</th>
+                <th>Return</th>
+                <th class="highlight-column">Contracts</th>
+                <th>Used</th>
               </tr>
             </thead>
             <tbody id="resultBody">
               <tr>
-                <td colspan="12" class="empty-cell">No scan has run yet.</td>
+                <td colspan="14" class="empty-cell">No scan has run yet.</td>
               </tr>
             </tbody>
           </table>
         </div>
       </section>
     </main>
+
+    <dialog class="onboarding-dialog" id="onboardingDialog" aria-labelledby="onboardingTitle">
+      <div class="onboarding-content">
+        <div class="onboarding-heading">
+          <div>
+            <p class="eyebrow">First-time setup</p>
+            <h2 id="onboardingTitle">Scan your Robinhood screeners in three steps</h2>
+          </div>
+          <button
+            class="icon-button"
+            id="onboardingCloseButton"
+            type="button"
+            aria-label="Close setup walkthrough"
+          >
+            &times;
+          </button>
+        </div>
+        <ol class="onboarding-steps">
+          <li>
+            <strong>Create three Robinhood screeners</strong>
+            <span>Use the exact Safe, Standard, and Mini names from the setup guide.</span>
+          </li>
+          <li>
+            <strong>Install the Chrome helper</strong>
+            <span>Log in directly on Robinhood and keep that browser tab open.</span>
+          </li>
+          <li>
+            <strong>Run your scan</strong>
+            <span>Select Robinhood, choose a screener, and click Refresh.</span>
+          </li>
+        </ol>
+        <div class="onboarding-actions">
+          <a class="primary-button" data-onboarding-dismiss href="/guide.html">View Setup Guide</a>
+          <button class="secondary-button" id="onboardingMockButton" type="button">
+            Start with Mock Mode
+          </button>
+        </div>
+      </div>
+    </dialog>
 
     <script src="/app.js"></script>
   </body>

@@ -4,9 +4,10 @@
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <title>Install Helper - Wheel Strategy Options Screener</title>
-    <link rel="icon" href="/favicon-32.png" sizes="32x32" type="image/png" />
-    <link rel="icon" href="/favicon-16.png" sizes="16x16" type="image/png" />
-    <link rel="apple-touch-icon" href="/apple-touch-icon.png" />
+    <link rel="icon" href="/favicon.ico?v=0.2.5" sizes="any" />
+    <link rel="icon" href="/favicon-32.png?v=0.2.5" sizes="32x32" type="image/png" />
+    <link rel="icon" href="/favicon-16.png?v=0.2.5" sizes="16x16" type="image/png" />
+    <link rel="apple-touch-icon" href="/apple-touch-icon.png?v=0.2.5" />
     <link rel="stylesheet" href="/styles.css" />
   </head>
   <body>
@@ -16,7 +17,10 @@
           <p class="eyebrow">Chrome Helper</p>
           <h1>Install Robinhood Helper</h1>
         </div>
-        <a class="secondary-button" href="/">Back to Screener</a>
+        <div class="topbar-actions">
+          <a class="secondary-button" href="/guide.html">Setup Guide</a>
+          <a class="secondary-button" href="/">Back to Screener</a>
+        </div>
       </header>
 
       <section class="connection-band">
@@ -25,8 +29,8 @@
             <h2>Private beta install</h2>
             <p>
               The helper runs in your Chrome browser, reads only ticker symbols from your
-              Robinhood lists, and sends those symbols to the screener. Current helper
-              version: <strong>0.1.9</strong>.
+              Robinhood lists and put chains, and sends symbols plus quote values to the screener.
+              Current helper version: <strong>0.2.5</strong>.
             </p>
           </div>
           <a class="primary-button" href="/downloads/wheel-screener-helper.zip">
@@ -34,8 +38,8 @@
           </a>
         </div>
         <p class="disclosure">
-          Chrome does not allow arbitrary websites to install extensions directly. For a
-          one-click public install, publish this helper in the Chrome Web Store and link to that listing.
+          Chrome does not allow this private helper to install itself automatically. Download the ZIP,
+          load it unpacked, and reload the extension after each helper update.
         </p>
       </section>
 
@@ -43,7 +47,7 @@
         <div class="table-header">
           <div>
             <h2>Install Steps</h2>
-            <p>Use this flow until the helper is published in the Chrome Web Store.</p>
+            <p>Use this same flow whenever you update the helper.</p>
           </div>
         </div>
         <ol>
@@ -52,7 +56,7 @@
           <li>Turn on <code>Developer mode</code>.</li>
           <li>Click <code>Load unpacked</code>.</li>
           <li>Select the extracted helper folder.</li>
-          <li>Confirm Chrome shows helper version <code>0.1.8</code>.</li>
+          <li>Confirm Chrome shows helper version <code>0.2.5</code>.</li>
           <li>Return to the screener and refresh the page.</li>
         </ol>
       </section>
