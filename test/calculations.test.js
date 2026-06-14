@@ -7,7 +7,11 @@ const {
   applyAllocations
 } = require("../src/lib/calculations");
 const {
+  applyCoveredCallSelections,
+  callOptionRequestsForRows,
   applyOptionSelections,
+  optionRequestsForRows,
+  selectCoveredCallQuote,
   selectCspQuote
 } = require("../src/lib/options");
 
@@ -67,6 +71,259 @@ test("selects CSP quotes using a supplied weekly return threshold", () => {
     cspBid: 0.24,
     cspReturnPercent: 3
   });
+});
+
+test("covered call selection uses max current and average cost as return base", () => {
+  const selected = selectCoveredCallQuote({
+    currentPrice: 15,
+    averageCost: 12,
+    minReturnDecimal: 0.02,
+    quotes: [
+      { strike: 15, bid: 1 },
+      { strike: 16, bid: 0.2 },
+      { strike: 17, bid: 0.31 },
+      { strike: 18, bid: 0.4 }
+    ]
+  });
+
+  assert.equal(selected.ccStrike, 18);
+  assert.equal(selected.ccBid, 0.4);
+  assert.equal(selected.ccReturnPercent, (0.4 / 15) * 100);
+});
+
+test("covered call selection rejects primary strikes at or below return base", () => {
+  const selected = selectCoveredCallQuote({
+    currentPrice: 10,
+    averageCost: 12,
+    minReturnDecimal: 0.02,
+    quotes: [
+      { strike: 11.5, bid: 1 },
+      { strike: 12, bid: 1 },
+      { strike: 12.5, bid: 0.24 },
+      { strike: 13, bid: 0.28 }
+    ]
+  });
+
+  assert.equal(selected.ccStrike, 13);
+  assert.equal(selected.ccReturnPercent, (0.28 / 12) * 100);
+});
+
+test("covered call selection falls back to nearest positive bid above average cost", () => {
+  const selected = selectCoveredCallQuote({
+    currentPrice: 20,
+    averageCost: 12,
+    minReturnDecimal: 0.05,
+    quotes: [
+      { strike: 12, bid: 1 },
+      { strike: 14, bid: 0.01 },
+      { strike: 18, bid: 0.02 },
+      { strike: 19, bid: 0.01 }
+    ]
+  });
+
+  assert.equal(selected.ccStrike, 14);
+  assert.equal(selected.ccBid, 0.01);
+  assert.equal(selected.ccUsedFallback, true);
+});
+
+test("covered call selection falls back below average cost when above-cost bids are zero", () => {
+  const selected = selectCoveredCallQuote({
+    currentPrice: 20,
+    averageCost: 12,
+    minReturnDecimal: 0.05,
+    quotes: [
+      { strike: 10, bid: 0.03 },
+      { strike: 11.5, bid: 0.02 },
+      { strike: 12.5, bid: 0 },
+      { strike: 13, bid: 0 }
+    ]
+  });
+
+  assert.equal(selected.ccStrike, 11.5);
+  assert.equal(selected.ccBid, 0.02);
+  assert.equal(selected.ccUsedFallback, true);
+});
+
+test("covered call selection marks SKIP when no positive bid call exists", () => {
+  const selected = selectCoveredCallQuote({
+    currentPrice: 20,
+    averageCost: 12,
+    minReturnDecimal: 0,
+    quotes: [
+      { strike: 11, bid: 0 },
+      { strike: 12.5, bid: 0 }
+    ]
+  });
+
+  assert.equal(selected, null);
+});
+
+test("covered call finalization computes total return dollars and percent", () => {
+  const rows = applyCoveredCallSelections(
+    [
+      {
+        symbol: "AAA",
+        status: "ok",
+        currentPrice: 15,
+        minTarget: 10,
+        averageTarget: 12,
+        maxTarget: 20,
+        averageCost: 10,
+        contracts: 2
+      }
+    ],
+    {
+      AAA: [{ strike: 16, bid: 0.4 }]
+    },
+    0.02
+  );
+
+  assert.equal(rows[0].eligible, true);
+  assert.equal(rows[0].ccStrike, 16);
+  assert.equal(rows[0].totalReturnDollars, ((16 - 10) + 0.4) * 100 * 2);
+  assert.equal(rows[0].totalReturnPercent, (rows[0].totalReturnDollars / (10 * 100 * 2)) * 100);
+});
+
+test("covered call finalization can use current-only TradingView rows", () => {
+  const rows = applyCoveredCallSelections(
+    [
+      {
+        symbol: "RR",
+        status: "ok",
+        currentPrice: 2.4,
+        minTarget: null,
+        averageTarget: null,
+        maxTarget: null,
+        averageCost: 3.81,
+        contracts: 33,
+        warning: "TradingView analyst targets were unavailable; using current price only."
+      }
+    ],
+    {
+      RR: [
+        { strike: 4, bid: 0.1 },
+        { strike: 4.5, bid: 0.02 }
+      ]
+    },
+    0.02
+  );
+
+  assert.equal(rows[0].eligible, true);
+  assert.equal(rows[0].ccStrike, 4);
+  assert.equal(rows[0].error, "TradingView analyst targets were unavailable; using current price only.");
+});
+
+test("covered call finalization falls back to average cost when current price is missing", () => {
+  const rows = applyCoveredCallSelections(
+    [
+      {
+        symbol: "RR",
+        status: "missing-current",
+        currentPrice: null,
+        averageCost: 3.81,
+        contracts: 33,
+        canUseCoveredCallQuotes: true,
+        warning: "TradingView current price was unavailable; using average cost as the return base."
+      }
+    ],
+    {
+      RR: [{ strike: 4, bid: 0.1 }]
+    },
+    0.02
+  );
+
+  assert.equal(rows[0].eligible, true);
+  assert.equal(rows[0].ccStrike, 4);
+  assert.equal(rows[0].ccReturnBase, 3.81);
+  assert.match(rows[0].error, /average cost as the return base/);
+});
+
+test("covered call option requests include rows without TradingView current price", () => {
+  const requests = callOptionRequestsForRows([
+    {
+      symbol: "RR",
+      status: "missing-current",
+      currentPrice: null,
+      averageCost: 3.81
+    },
+    {
+      symbol: "BAD",
+      status: "unavailable",
+      currentPrice: null,
+      averageCost: null
+    }
+  ]);
+
+  assert.deepEqual(requests, [
+    {
+      symbol: "RR",
+      currentPrice: null,
+      averageCost: 3.81
+    }
+  ]);
+});
+
+test("covered call option requests dedupe duplicate symbols", () => {
+  const requests = callOptionRequestsForRows([
+    {
+      symbol: "onds",
+      currentPrice: null,
+      averageCost: 12.2
+    },
+    {
+      symbol: "ONDS",
+      currentPrice: 10.23,
+      averageCost: 15.5
+    },
+    {
+      symbol: "QUBT",
+      currentPrice: 9.91,
+      averageCost: 8
+    }
+  ]);
+
+  assert.deepEqual(requests, [
+    {
+      symbol: "ONDS",
+      currentPrice: 10.23,
+      averageCost: 12.2
+    },
+    {
+      symbol: "QUBT",
+      currentPrice: 9.91,
+      averageCost: 8
+    }
+  ]);
+});
+
+test("CSP option requests dedupe duplicate eligible symbols", () => {
+  const requests = optionRequestsForRows([
+    {
+      symbol: "onds",
+      status: "ok",
+      forecastEligible: true,
+      currentPrice: 10.2
+    },
+    {
+      symbol: "ONDS",
+      status: "ok",
+      forecastEligible: true,
+      currentPrice: 10.3
+    },
+    {
+      symbol: "SKIP",
+      status: "skip",
+      forecastEligible: true,
+      currentPrice: 8
+    }
+  ]);
+
+  assert.deepEqual(requests, [
+    {
+      symbol: "ONDS",
+      currentPrice: 10.2
+    }
+  ]);
 });
 
 test("ONDS cached quote chain preserves known-good CSP behavior", () => {

@@ -1,0 +1,144 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <meta
+      name="description"
+      content="Wheel Strategy Screener calculators for CSP return, covered-call return, and weekly/yearly conversions."
+    />
+    <title>Calculator - Wheel Strategy Screener</title>
+    <link rel="icon" href="/favicon.ico?v=0.2.6" sizes="any" />
+    <link rel="icon" href="/favicon-32.png?v=0.2.6" sizes="32x32" type="image/png" />
+    <link rel="icon" href="/favicon-16.png?v=0.2.6" sizes="16x16" type="image/png" />
+    <link rel="apple-touch-icon" href="/apple-touch-icon.png?v=0.2.6" />
+    <link rel="stylesheet" href="/styles.css" />
+  </head>
+  <body>
+    <main class="app-shell simple-page">
+      <header class="topbar page-topbar">
+        <div class="title-block">
+          <p class="eyebrow">Resources</p>
+          <h1>Calculator</h1>
+          <p class="page-intro">
+            Standalone tools for the same return rules used by the dashboard. These are
+            educational calculators and do not place trades.
+          </p>
+        </div>
+        <div class="topbar-actions">
+          <a class="secondary-button" href="/guide.html">Setup Guide</a>
+          <a class="secondary-button" href="/">Back to Screener</a>
+        </div>
+      </header>
+
+      <section class="calculator-grid" aria-label="Return calculators">
+        <article class="calculator-card" data-calculator="csp-yearly">
+          <div>
+            <p class="step-kicker">CSP Compounding</p>
+            <h2>Weekly to yearly return</h2>
+            <p>CSP mode displays yearly return with 52-week compounding: <code>(1 + weekly)^52 - 1</code>.</p>
+          </div>
+          <label class="mini-field">
+            <span>Weekly %</span>
+            <input id="calcCspWeekly" type="number" value="1" min="0" step="0.01" inputmode="decimal" />
+          </label>
+          <output id="calcCspYearly" class="calculator-output">67.77% yearly</output>
+        </article>
+
+        <article class="calculator-card" data-calculator="cc-yearly">
+          <div>
+            <p class="step-kicker">CC Annualized</p>
+            <h2>Weekly to yearly return</h2>
+            <p>CC mode displays yearly return with simple annualization: <code>weekly * 52</code>.</p>
+          </div>
+          <label class="mini-field">
+            <span>Weekly %</span>
+            <input id="calcCcWeekly" type="number" value="2" min="0" step="0.01" inputmode="decimal" />
+          </label>
+          <output id="calcCcYearly" class="calculator-output">104.00% yearly</output>
+        </article>
+
+        <article class="calculator-card" data-calculator="csp-return">
+          <div>
+            <p class="step-kicker">Cash-Secured Put</p>
+            <h2>Return from strike and bid</h2>
+            <p>CSP quote return uses <code>bid / strike</code>.</p>
+          </div>
+          <div class="calculator-fields two-up">
+            <label class="mini-field">
+              <span>Strike</span>
+              <input id="calcCspStrike" type="number" value="10" min="0" step="0.01" inputmode="decimal" />
+            </label>
+            <label class="mini-field">
+              <span>Bid</span>
+              <input id="calcCspBid" type="number" value="0.2" min="0" step="0.01" inputmode="decimal" />
+            </label>
+          </div>
+          <output id="calcCspReturn" class="calculator-output">2.00% return</output>
+        </article>
+
+        <article class="calculator-card" data-calculator="cc-total">
+          <div>
+            <p class="step-kicker">Covered Call</p>
+            <h2>Premium and assignment return</h2>
+            <p>CC total return uses <code>((strike - averageCost) + bid) * 100 * contracts</code>.</p>
+          </div>
+          <div class="calculator-fields">
+            <label class="mini-field">
+              <span>Average Cost</span>
+              <input id="calcCcAverageCost" type="number" value="12" min="0" step="0.01" inputmode="decimal" />
+            </label>
+            <label class="mini-field">
+              <span>Strike</span>
+              <input id="calcCcStrike" type="number" value="14" min="0" step="0.01" inputmode="decimal" />
+            </label>
+            <label class="mini-field">
+              <span>Bid</span>
+              <input id="calcCcBid" type="number" value="0.35" min="0" step="0.01" inputmode="decimal" />
+            </label>
+            <label class="mini-field">
+              <span>Contracts</span>
+              <input id="calcCcContracts" type="number" value="1" min="0" step="1" inputmode="numeric" />
+            </label>
+          </div>
+          <output id="calcCcPremium" class="calculator-output">$35.00 premium</output>
+          <output id="calcCcTotal" class="calculator-output secondary-output">$235.00 total return (19.58%)</output>
+        </article>
+      </section>
+
+      <footer class="site-footer" aria-label="Footer navigation">
+        <div class="page-inner footer-inner">
+          <div class="footer-brand">
+            <p class="eyebrow">Wheel Strategy Screener</p>
+            <h2>End-of-week options workflow</h2>
+            <p>
+              Screen cash-secured puts, review covered calls, and keep Robinhood
+              credentials local to Chrome.
+            </p>
+          </div>
+          <nav class="footer-columns" aria-label="Footer links">
+            <div class="footer-column">
+              <h3>Product</h3>
+              <a href="/">Dashboard</a>
+              <a href="/guide.html">Setup Guide</a>
+              <a href="/helper.html">Install Helper</a>
+            </div>
+            <div class="footer-column">
+              <h3>Resources</h3>
+              <a href="/learn.html">Learn</a>
+              <a href="/faq.html">FAQ</a>
+              <a href="/calculator.html">Calculator</a>
+            </div>
+            <div class="footer-column">
+              <h3>Company</h3>
+              <a href="/contact.html">Contact Us</a>
+              <a href="/privacy.html">Privacy Policy</a>
+              <a href="/terms.html">Terms of Service</a>
+            </div>
+          </nav>
+        </div>
+      </footer>
+    </main>
+    <script src="/calculator.js"></script>
+  </body>
+</html>

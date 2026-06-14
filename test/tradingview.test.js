@@ -2,6 +2,7 @@ const assert = require("node:assert/strict");
 const test = require("node:test");
 const {
   fetchScannerForecast,
+  parseCurrentPriceHtml,
   normalizeSymbolForTradingView,
   parseForecastHtml,
   parseNumber
@@ -34,6 +35,15 @@ test("parses forecast values from TradingView-like HTML text", () => {
   assert.equal(parsed.maxTarget, 25);
   assert.equal(parsed.minTarget, 16);
   assert.equal(parsed.analystCount, 8);
+});
+
+test("parses current price from TradingView symbol page HTML", () => {
+  const html = `
+    <span class="last-fzcYMweq js-symbol-last">2.40</span>
+    <span>NASDAQ:RR</span>
+  `;
+
+  assert.equal(parseCurrentPriceHtml(html, "RR"), 2.4);
 });
 
 test("handles unavailable target estimates", () => {

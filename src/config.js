@@ -4,18 +4,18 @@ const IS_PRODUCTION = NODE_ENV === "production";
 const SCREENERS = [
   {
     id: "safe",
-    name: "Wheel Strategy Screener Safe",
-    shortName: "Safe"
+    name: "Wheel Strategy 1",
+    shortName: "Wheel Strategy 1"
   },
   {
     id: "standard",
-    name: "Wheel Strategy Screener",
-    shortName: "Standard"
+    name: "Wheel Strategy 2",
+    shortName: "Wheel Strategy 2"
   },
   {
     id: "mini",
-    name: "Wheel Strategy Screener Mini",
-    shortName: "Mini"
+    name: "Wheel Strategy 3",
+    shortName: "Wheel Strategy 3"
   }
 ];
 
@@ -36,5 +36,6 @@ module.exports = {
     process.env.TRADINGVIEW_CACHE_TTL_MS || "900000",
     10
   ),
+  DEFAULT_HOST: process.env.HOST || "0.0.0.0",
   DEFAULT_PORT: Number.parseInt(process.env.PORT || "5173", 10)
 };

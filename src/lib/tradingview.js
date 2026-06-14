@@ -115,6 +115,25 @@ function parseForecastHtml(html, symbol) {
   };
 }
 
+function parseCurrentPriceHtml(html, symbol) {
+  const text = htmlToText(html);
+  const tvSymbol = normalizeSymbolForTradingView(symbol).replace("-", "[.-]?");
+  const symbolPattern = new RegExp(`${tvSymbol}\\s+([\\d,.]+)\\s*USD`, "i");
+  const symbolMatch = text.match(symbolPattern);
+  if (symbolMatch) {
+    return parseNumber(symbolMatch[1]);
+  }
+
+  const lastPriceMatch = String(html || "").match(
+    /class="[^"]*(?:js-symbol-last|last-[^"]*)[^"]*"[^>]*>\s*([\d,.]+)\s*</i
+  );
+  if (lastPriceMatch) {
+    return parseNumber(lastPriceMatch[1]);
+  }
+
+  return null;
+}
+
 async function fetchWithTimeout(url, options = {}) {
   const controller = new AbortController();
   const timeout = setTimeout(() => controller.abort(), options.timeoutMs || REQUEST_TIMEOUT_MS);
@@ -182,6 +201,43 @@ async function fetchCurrentPrice(exchange, symbol) {
         description: values[4] || null
       }
     : null;
+}
+
+async function fetchCurrentPriceForSymbol(symbol, options = {}) {
+  const exchanges = options.exchanges || TRADINGVIEW_EXCHANGES;
+  const tvSymbol = normalizeSymbolForTradingView(symbol);
+
+  for (const exchange of exchanges) {
+    const scannerQuote = await fetchCurrentPrice(exchange, tvSymbol).catch(() => null);
+    if (Number.isFinite(scannerQuote?.currentPrice)) {
+      return {
+        ...scannerQuote,
+        exchange,
+        url: `https://www.tradingview.com/symbols/${exchange}-${tvSymbol}/`
+      };
+    }
+  }
+
+  for (const exchange of exchanges) {
+    const url = `https://www.tradingview.com/symbols/${exchange}-${tvSymbol}/`;
+    const response = await fetchText(url).catch(() => null);
+    if (!response?.ok) {
+      continue;
+    }
+
+    const currentPrice = parseCurrentPriceHtml(response.text, tvSymbol);
+    if (Number.isFinite(currentPrice)) {
+      return {
+        currentPrice,
+        currency: "USD",
+        description: null,
+        exchange,
+        url
+      };
+    }
+  }
+
+  return null;
 }
 
 async function fetchScannerForecast(exchange, symbol) {
@@ -295,6 +351,7 @@ async function fetchForecastForSymbolUncached(symbol, options = {}) {
   const exchanges = options.exchanges || TRADINGVIEW_EXCHANGES;
   const tvSymbol = normalizeSymbolForTradingView(symbol);
   const attempted = [];
+  let currentOnlyResult = null;
 
   for (const exchange of exchanges) {
     const url = `https://www.tradingview.com/symbols/${exchange}-${tvSymbol}/forecast/`;
@@ -314,6 +371,15 @@ async function fetchForecastForSymbolUncached(symbol, options = {}) {
       ) {
         return buildForecastRow(symbol, scannerForecast.exchange || exchange, url, scannerForecast);
       }
+      if (scannerForecast && Number.isFinite(scannerForecast.currentPrice) && !currentOnlyResult) {
+        currentOnlyResult = buildForecastRow(
+          symbol,
+          scannerForecast.exchange || exchange,
+          url,
+          scannerForecast,
+          "TradingView analyst targets were unavailable for this symbol."
+        );
+      }
 
       const [forecastResponse, quote] = await Promise.all([
         fetchText(url),
@@ -331,6 +397,21 @@ async function fetchForecastForSymbolUncached(symbol, options = {}) {
         forecast.maxTarget === null &&
         forecast.minTarget === null
       ) {
+        if (Number.isFinite(quote?.currentPrice) && !currentOnlyResult) {
+          currentOnlyResult = buildForecastRow(
+            symbol,
+            exchange,
+            url,
+            {
+              currentPrice: quote.currentPrice,
+              minTarget: null,
+              averageTarget: null,
+              maxTarget: null,
+              analystCount: null
+            },
+            "TradingView analyst targets were unavailable for this symbol."
+          );
+        }
         continue;
       }
 
@@ -346,6 +427,10 @@ async function fetchForecastForSymbolUncached(symbol, options = {}) {
     } catch (error) {
       attempted.push(`${exchange}: ${error.message}`);
     }
+  }
+
+  if (currentOnlyResult) {
+    return currentOnlyResult;
   }
 
   return {
@@ -368,8 +453,10 @@ module.exports = {
   parseNumber,
   htmlToText,
   parseForecastHtml,
+  parseCurrentPriceHtml,
   fetchForecastForSymbol,
   fetchForecastForSymbolUncached,
   fetchScannerForecast,
-  fetchCurrentPrice
+  fetchCurrentPrice,
+  fetchCurrentPriceForSymbol
 };

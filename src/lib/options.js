@@ -68,6 +68,70 @@ function selectCspQuote(currentPrice, quotes, minReturnDecimal = MIN_CSP_RETURN_
   };
 }
 
+function selectCoveredCallQuote({
+  currentPrice,
+  averageCost,
+  quotes,
+  minReturnDecimal = MIN_CSP_RETURN_DECIMAL
+}) {
+  const current = toFiniteNumber(currentPrice);
+  const cost = toFiniteNumber(averageCost);
+  const minimumReturn = normalizeMinReturnDecimal(minReturnDecimal);
+
+  if (!Number.isFinite(cost) || cost <= 0) {
+    return null;
+  }
+
+  const returnBase =
+    Number.isFinite(current) && current > 0 ? Math.max(current, cost) : cost;
+  const normalizedQuotes = normalizeOptionQuotes(quotes).filter(
+    (quote) => quote.strike > 0 && quote.bid > 0
+  );
+
+  const primaryCandidates = normalizedQuotes
+    .filter((quote) => quote.strike > returnBase)
+    .map((quote) => ({
+      ...quote,
+      returnDecimal: quote.bid / returnBase,
+      usedFallback: false
+    }))
+    .filter((quote) => quote.returnDecimal >= minimumReturn)
+    .sort((a, b) => b.strike - a.strike || b.returnDecimal - a.returnDecimal);
+
+  const aboveCostFallback = normalizedQuotes
+    .filter((quote) => quote.strike > cost)
+    .map((quote) => ({
+      ...quote,
+      returnDecimal: quote.bid / returnBase,
+      usedFallback: true
+    }))
+    .sort((a, b) => a.strike - b.strike || b.returnDecimal - a.returnDecimal);
+
+  const belowCostFallback = normalizedQuotes
+    .filter((quote) => quote.strike < cost)
+    .map((quote) => ({
+      ...quote,
+      returnDecimal: quote.bid / returnBase,
+      usedFallback: true
+    }))
+    .sort((a, b) => b.strike - a.strike || b.returnDecimal - a.returnDecimal);
+
+  const selected =
+    primaryCandidates[0] || aboveCostFallback[0] || belowCostFallback[0];
+
+  if (!selected) {
+    return null;
+  }
+
+  return {
+    ccStrike: selected.strike,
+    ccBid: selected.bid,
+    ccReturnPercent: selected.returnDecimal * 100,
+    ccReturnBase: returnBase,
+    ccUsedFallback: selected.usedFallback
+  };
+}
+
 function normalizeQuotesBySymbol(optionQuotesBySymbol) {
   const normalized = new Map();
 
@@ -184,6 +248,108 @@ function applyOptionSelections(
   });
 }
 
+function applyCoveredCallSelections(
+  rows,
+  optionQuotesBySymbol,
+  minReturnDecimal = MIN_CSP_RETURN_DECIMAL,
+  optionDiagnosticsBySymbol = {}
+) {
+  const minimumReturn = normalizeMinReturnDecimal(minReturnDecimal);
+  const quotesBySymbol = normalizeQuotesBySymbol(optionQuotesBySymbol);
+  const diagnosticsBySymbol = normalizeDiagnosticsBySymbol(optionDiagnosticsBySymbol);
+
+  return rows.map((row) => {
+    const symbol = String(row.symbol || "").trim().toUpperCase();
+    const averageCost = toFiniteNumber(row.averageCost);
+    const contracts = toFiniteNumber(row.contracts);
+    const baseRow = {
+      ...row,
+      symbol,
+      averageCost,
+      contracts,
+      eligible: false,
+      ccStrike: null,
+      ccBid: null,
+      ccReturnPercent: null,
+      totalReturnDollars: null,
+      totalReturnPercent: null
+    };
+
+    if (row.status !== "ok" && !row.canUseCoveredCallQuotes) {
+      return baseRow;
+    }
+
+    const diagnostics = diagnosticsBySymbol.get(symbol);
+    if (diagnostics?.error) {
+      return {
+        ...baseRow,
+        status: "unavailable",
+        error: diagnostics.error
+      };
+    }
+
+    const rawQuotes = quotesBySymbol.get(symbol);
+    const normalizedQuotes = normalizeOptionQuotes(rawQuotes);
+    if (!Array.isArray(rawQuotes) || normalizedQuotes.length === 0) {
+      return {
+        ...baseRow,
+        status: "unavailable",
+        error: "No readable Robinhood sell-call quotes were returned for this symbol."
+      };
+    }
+
+    if (!Number.isFinite(averageCost) || averageCost <= 0) {
+      return {
+        ...baseRow,
+        status: "unavailable",
+        error: "Average cost is required for covered-call strike selection."
+      };
+    }
+
+    const selected = selectCoveredCallQuote({
+      currentPrice: row.currentPrice,
+      averageCost,
+      quotes: normalizedQuotes,
+      minReturnDecimal: minimumReturn
+    });
+
+    if (!selected) {
+      return {
+        ...baseRow,
+        status: "skip",
+        error: "No positive-bid Robinhood call strike was above average cost."
+      };
+    }
+
+    const validContracts = Number.isFinite(contracts) && contracts > 0;
+    const totalReturnDollars = validContracts
+      ? ((selected.ccStrike - averageCost) + selected.ccBid) * 100 * contracts
+      : null;
+    const totalReturnPercent =
+      validContracts && averageCost > 0
+        ? (totalReturnDollars / (averageCost * 100 * contracts)) * 100
+        : null;
+
+    return {
+      ...baseRow,
+      eligible: true,
+      status: "ok",
+      error: selected.ccUsedFallback
+        ? [
+            row.warning || row.error,
+            `Fallback selected: no call strike above return base met the ${formatReturnRulePercent(minimumReturn)}% bid/base return rule.`
+          ]
+            .filter(Boolean)
+            .join(" ")
+        : row.warning || null,
+      warning: row.warning || null,
+      ...selected,
+      totalReturnDollars,
+      totalReturnPercent
+    };
+  });
+}
+
 function buildMockQuotesForRow(row, index = 0) {
   const currentPrice = toFiniteNumber(row.currentPrice);
   if (!Number.isFinite(currentPrice) || currentPrice <= 1) {
@@ -233,8 +399,85 @@ function buildMockQuotesBySymbol(rows) {
   return quotesBySymbol;
 }
 
+function buildMockCallQuotesForRow(row, index = 0) {
+  const currentPrice = toFiniteNumber(row.currentPrice);
+  const averageCost = toFiniteNumber(row.averageCost);
+  const base = Math.max(
+    Number.isFinite(currentPrice) && currentPrice > 0 ? currentPrice : 0,
+    Number.isFinite(averageCost) && averageCost > 0 ? averageCost : 0
+  );
+  if (!Number.isFinite(base) || base <= 0) {
+    return [];
+  }
+
+  const nearestAbove = Math.ceil((base + 0.01) * 2) / 2;
+  const bidAt = (strike, returnDecimal) => Math.round(base * returnDecimal * 100) / 100;
+
+  return [
+    { strike: Math.max(0.5, nearestAbove - 1), bid: 0.01 },
+    { strike: nearestAbove, bid: bidAt(nearestAbove, 0.011 + (index % 2) * 0.003) },
+    { strike: nearestAbove + 0.5, bid: bidAt(nearestAbove + 0.5, 0.021 + (index % 3) * 0.002) },
+    { strike: nearestAbove + 1, bid: bidAt(nearestAbove + 1, 0.027) },
+    { strike: nearestAbove + 1.5, bid: bidAt(nearestAbove + 1.5, 0.018) }
+  ];
+}
+
+function buildMockCallQuotesBySymbol(rows) {
+  const quotesBySymbol = {};
+
+  rows.forEach((row, index) => {
+    if (Number.isFinite(toFiniteNumber(row.averageCost)) && toFiniteNumber(row.averageCost) > 0) {
+      quotesBySymbol[String(row.symbol || "").toUpperCase()] = buildMockCallQuotesForRow(row, index);
+    }
+  });
+
+  return quotesBySymbol;
+}
+
+function dedupeOptionRequests(requests) {
+  const bySymbol = new Map();
+
+  for (const request of requests) {
+    const symbol = String(request?.symbol || "")
+      .trim()
+      .toUpperCase();
+    if (!symbol) {
+      continue;
+    }
+
+    const currentPrice = toFiniteNumber(request?.currentPrice);
+    const averageCost = toFiniteNumber(request?.averageCost);
+    const existing = bySymbol.get(symbol);
+
+    if (!existing) {
+      const nextRequest = { symbol };
+
+      if ("currentPrice" in request) {
+        nextRequest.currentPrice = Number.isFinite(currentPrice) ? currentPrice : null;
+      }
+
+      if ("averageCost" in request) {
+        nextRequest.averageCost = Number.isFinite(averageCost) ? averageCost : null;
+      }
+
+      bySymbol.set(symbol, nextRequest);
+      continue;
+    }
+
+    if ("currentPrice" in request && !Number.isFinite(existing.currentPrice) && Number.isFinite(currentPrice)) {
+      existing.currentPrice = currentPrice;
+    }
+
+    if ("averageCost" in request && !Number.isFinite(existing.averageCost) && Number.isFinite(averageCost)) {
+      existing.averageCost = averageCost;
+    }
+  }
+
+  return [...bySymbol.values()];
+}
+
 function optionRequestsForRows(rows) {
-  return rows
+  const requests = rows
     .filter(
       (row) =>
         row.status === "ok" &&
@@ -245,14 +488,43 @@ function optionRequestsForRows(rows) {
       symbol: row.symbol,
       currentPrice: row.currentPrice
     }));
+
+  return dedupeOptionRequests(requests);
+}
+
+function callOptionRequestsForRows(rows) {
+  const requests = rows
+    .filter((row) => {
+      const symbol = String(row.symbol || "").trim();
+      const averageCost = toFiniteNumber(row.averageCost);
+      return (
+        Boolean(symbol) &&
+        row.canUseCoveredCallQuotes !== false &&
+        Number.isFinite(averageCost) &&
+        averageCost > 0
+      );
+    })
+    .map((row) => ({
+      symbol: row.symbol,
+      currentPrice: Number.isFinite(row.currentPrice) ? row.currentPrice : null,
+      averageCost: row.averageCost
+    }));
+
+  return dedupeOptionRequests(requests);
 }
 
 module.exports = {
   MIN_CSP_RETURN_DECIMAL,
+  toFiniteNumber,
   normalizeOptionQuotes,
   normalizeMinReturnDecimal,
   selectCspQuote,
+  selectCoveredCallQuote,
   applyOptionSelections,
+  applyCoveredCallSelections,
   buildMockQuotesBySymbol,
-  optionRequestsForRows
+  buildMockCallQuotesBySymbol,
+  dedupeOptionRequests,
+  optionRequestsForRows,
+  callOptionRequestsForRows
 };

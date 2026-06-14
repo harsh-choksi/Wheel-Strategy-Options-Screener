@@ -1,9 +1,3 @@
-const SCREENERS = {
-  safe: "Wheel Strategy Screener Safe",
-  standard: "Wheel Strategy Screener",
-  mini: "Wheel Strategy Screener Mini"
-};
-
 function callbackApi(call) {
   return new Promise((resolve, reject) => {
     call((result) => {
@@ -158,6 +152,30 @@ async function ensureRobinhoodTabForOptions() {
   return tab;
 }
 
+async function ensureRobinhoodTabForPositions() {
+  let tab = await findRobinhoodTab();
+  if (!tab) {
+    tab = await createTab({
+      url: "https://robinhood.com/account/investing",
+      active: true
+    });
+    await waitForTabComplete(tab.id).catch(() => {});
+    return tab;
+  }
+
+  if (/\/login\b|\/signup\b/i.test(tab.url || "")) {
+    await updateTab(tab.id, { active: true });
+    throw new Error("Log in to Robinhood in the opened Chrome tab, then return and refresh.");
+  }
+
+  await updateTab(tab.id, {
+    active: true,
+    url: "https://robinhood.com/account/investing"
+  });
+  await waitForTabComplete(tab.id).catch(() => {});
+  return tab;
+}
+
 async function sendRobinhoodMessage(tabId, message) {
   try {
     return await sendTabMessage(tabId, message);
@@ -168,9 +186,9 @@ async function sendRobinhoodMessage(tabId, message) {
 }
 
 async function extractScreener(payload) {
-  const screenerName = payload?.screenerName || SCREENERS[payload?.screenerId || "safe"];
+  const screenerName = String(payload?.screenerName || "").trim();
   if (!screenerName) {
-    throw new Error("Unknown screener.");
+    throw new Error("Choose a saved Robinhood screener before scanning.");
   }
 
   const tab = await ensureRobinhoodTabForScan();
@@ -186,11 +204,73 @@ async function extractScreener(payload) {
   return result;
 }
 
-async function extractPutOptionQuotes(payload) {
-  const requests = Array.isArray(payload?.requests) ? payload.requests : [];
+async function extractStockPositions() {
+  const tab = await ensureRobinhoodTabForPositions();
+  const result = await sendRobinhoodMessage(tab.id, {
+    action: "extractStockPositions"
+  });
+
+  if (result?.error) {
+    throw new Error(result.error);
+  }
+
+  return result;
+}
+
+function uniqueOptionRequests(requests) {
+  const bySymbol = new Map();
+
+  for (const request of Array.isArray(requests) ? requests : []) {
+    const symbol = String(request?.symbol || "")
+      .trim()
+      .toUpperCase();
+    if (!symbol) {
+      continue;
+    }
+
+    const existing = bySymbol.get(symbol);
+    if (!existing) {
+      bySymbol.set(symbol, {
+        ...request,
+        symbol
+      });
+      continue;
+    }
+
+    if (
+      (existing.currentPrice === undefined ||
+        existing.currentPrice === null ||
+        existing.currentPrice === "") &&
+      request.currentPrice !== undefined &&
+      request.currentPrice !== null &&
+      request.currentPrice !== ""
+    ) {
+      existing.currentPrice = request.currentPrice;
+    }
+
+    if (
+      (existing.averageCost === undefined ||
+        existing.averageCost === null ||
+        existing.averageCost === "") &&
+      request.averageCost !== undefined &&
+      request.averageCost !== null &&
+      request.averageCost !== ""
+    ) {
+      existing.averageCost = request.averageCost;
+    }
+  }
+
+  return [...bySymbol.values()];
+}
+
+async function extractOptionQuotes(payload, optionType) {
+  const requests = uniqueOptionRequests(payload?.requests);
   const tab = await ensureRobinhoodTabForOptions();
   const optionQuotesBySymbol = {};
   const optionDiagnosticsBySymbol = {};
+  const normalizedType = optionType === "call" ? "call" : "put";
+  const action =
+    normalizedType === "call" ? "extractCallOptionQuotes" : "extractPutOptionQuotes";
 
   for (const request of requests) {
     const symbol = String(request?.symbol || "")
@@ -208,9 +288,10 @@ async function extractPutOptionQuotes(payload) {
       await waitForOptionsUrl(tab.id, symbol);
 
       const result = await sendRobinhoodMessage(tab.id, {
-        action: "extractPutOptionQuotes",
+        action,
         symbol,
-        currentPrice: request.currentPrice
+        currentPrice: request.currentPrice,
+        averageCost: request.averageCost
       });
 
       if (result?.error) {
@@ -233,6 +314,14 @@ async function extractPutOptionQuotes(payload) {
   };
 }
 
+function extractPutOptionQuotes(payload) {
+  return extractOptionQuotes(payload, "put");
+}
+
+function extractCallOptionQuotes(payload) {
+  return extractOptionQuotes(payload, "call");
+}
+
 chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
   (async () => {
     if (message?.action === "ping") {
@@ -253,8 +342,16 @@ chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
       return extractScreener(message.payload || {});
     }
 
+    if (message?.action === "extractStockPositions") {
+      return extractStockPositions();
+    }
+
     if (message?.action === "extractPutOptionQuotes") {
       return extractPutOptionQuotes(message.payload || {});
+    }
+
+    if (message?.action === "extractCallOptionQuotes") {
+      return extractCallOptionQuotes(message.payload || {});
     }
 
     throw new Error("Unknown helper action.");

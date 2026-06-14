@@ -5,7 +5,7 @@ const MOCK_SYMBOLS = {
 };
 
 function getMockSymbols(screenerId) {
-  return MOCK_SYMBOLS[screenerId] || MOCK_SYMBOLS.safe;
+  return MOCK_SYMBOLS[screenerId] || MOCK_SYMBOLS.standard;
 }
 
 module.exports = {

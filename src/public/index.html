@@ -5,25 +5,33 @@
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <meta
       name="description"
-      content="Robinhood list and TradingView forecast dashboard for wheel strategy screening."
+      content="Robinhood and TradingView dashboard for cash-secured put and covered-call screening."
     />
-    <title>Wheel Strategy Options Screener (EOW)</title>
-    <link rel="icon" href="/favicon.ico?v=0.2.5" sizes="any" />
-    <link rel="icon" href="/favicon-32.png?v=0.2.5" sizes="32x32" type="image/png" />
-    <link rel="icon" href="/favicon-16.png?v=0.2.5" sizes="16x16" type="image/png" />
-    <link rel="apple-touch-icon" href="/apple-touch-icon.png?v=0.2.5" />
+    <title>Wheel Strategy Screener</title>
+    <link rel="icon" href="/favicon.ico?v=0.2.6" sizes="any" />
+    <link rel="icon" href="/favicon-32.png?v=0.2.6" sizes="32x32" type="image/png" />
+    <link rel="icon" href="/favicon-16.png?v=0.2.6" sizes="16x16" type="image/png" />
+    <link rel="apple-touch-icon" href="/apple-touch-icon.png?v=0.2.6" />
     <link rel="stylesheet" href="/styles.css" />
   </head>
   <body>
     <main class="app-shell">
       <header class="topbar">
-        <div>
+        <div class="title-block">
           <p class="eyebrow">Robinhood + TradingView</p>
-          <h1>Wheel Strategy Options Screener (EOW)</h1>
+          <h1>Wheel Strategy Screener</h1>
+          <p class="title-subtitle">End of Week</p>
         </div>
         <div class="topbar-actions">
+          <div class="segmented compact strategy-tabs" id="strategyTabs" role="tablist" aria-label="Strategy">
+            <button class="segment active" data-strategy="csp" type="button">CSP</button>
+            <button class="segment" data-strategy="cc" type="button">CC</button>
+          </div>
+          <button id="settingsButton" class="secondary-button guide-link-button" type="button">
+            Settings
+          </button>
           <a class="secondary-button guide-link-button" href="/guide.html">Setup Guide</a>
-          <div class="session-pill" id="sessionPill" aria-live="polite">Checking session...</div>
+          <div class="session-pill" id="sessionPill" aria-live="polite">Checking helper...</div>
         </div>
       </header>
 
@@ -31,7 +39,10 @@
         <div class="connection-panel" id="connectionPanel">
           <div>
             <h2 id="connectionTitle">Robinhood</h2>
-            <p id="connectionSubtitle">Install the Chrome helper to scan Safe, Standard, and Mini lists.</p>
+            <p class="connection-subtitle-row">
+              <span id="connectionSubtitle">Install the Chrome helper to scan Robinhood screeners, positions, and option chains.</span>
+              <a class="text-link connection-help-link" href="/guide.html">Need setup help?</a>
+            </p>
           </div>
           <div class="connection-actions" id="connectionActions">
             <a id="installHelperLink" class="secondary-button" href="/helper.html">
@@ -42,19 +53,19 @@
             </button>
           </div>
         </div>
-        <p class="disclosure">
-          Chrome helper reads list symbols locally. No Robinhood password or MFA code is sent to this site.
-          <a class="text-link" href="/guide.html">Need setup help?</a>
-        </p>
+        <div class="disclosure connection-disclosure">
+          <p>The Chrome helper runs locally in your browser. It reads screener symbols, stock positions, and option-chain quotes only.</p>
+          <p>Robinhood passwords, MFA codes, and cookies are not sent to this site.</p>
+        </div>
       </section>
 
       <section class="control-band" aria-label="Scanner controls">
-        <label class="field">
+        <label class="field csp-control">
           <span>Portfolio value</span>
           <input id="portfolioInput" type="number" min="0" step="100" value="10000" />
         </label>
 
-        <div class="field return-field" role="group" aria-label="CSP return target">
+        <div class="field return-field" role="group" aria-label="Option return target">
           <div class="return-input-grid">
             <label class="mini-field">
               <span>Weekly %</span>
@@ -63,7 +74,7 @@
                 type="number"
                 min="0"
                 step="0.01"
-                value="2"
+                value="1"
                 inputmode="decimal"
                 autocomplete="off"
               />
@@ -75,7 +86,7 @@
                 type="number"
                 min="0"
                 step="0.01"
-                value="180.0328"
+                value="67.7689"
                 inputmode="decimal"
                 autocomplete="off"
               />
@@ -83,12 +94,17 @@
           </div>
         </div>
 
-        <div class="field">
+        <div class="field csp-control csp-screener-control">
           <span>Screener</span>
-          <div class="segmented" id="screenerTabs" role="tablist"></div>
+          <div class="screener-select-row">
+            <select id="screenerSelect" aria-label="Saved Robinhood screener"></select>
+            <button id="manageScreenersButton" class="secondary-button compact-button" type="button">
+              Manage
+            </button>
+          </div>
         </div>
 
-        <div class="field">
+        <div class="field source-control">
           <span>Source</span>
           <div class="segmented compact" id="sourceModes" role="radiogroup" aria-label="Data source">
             <button class="segment active" data-mode="mock" type="button">Mock</button>
@@ -96,21 +112,21 @@
           </div>
         </div>
 
-        <button id="runButton" class="primary-button" type="button">Refresh</button>
-        <button id="exportButton" class="secondary-button" type="button" disabled>Export CSV</button>
+        <button id="runButton" class="primary-button run-control run-scan" type="button">Scan</button>
+        <button id="exportButton" class="secondary-button export-control" type="button" disabled>Export CSV</button>
       </section>
 
       <section class="summary-grid" aria-label="Scan summary">
         <div class="metric">
-          <span>Eligible</span>
+          <span id="eligibleMetricLabel">Eligible</span>
           <strong id="eligibleMetric">0</strong>
         </div>
         <div class="metric">
-          <span>Symbols</span>
+          <span id="symbolMetricLabel">Symbols</span>
           <strong id="symbolMetric">0</strong>
         </div>
         <div class="metric">
-          <span>Used</span>
+          <span id="allocatedMetricLabel">Used</span>
           <strong id="allocatedMetric">$0</strong>
         </div>
         <div class="metric">
@@ -123,19 +139,42 @@
 
       <section class="table-section" aria-label="Screener results">
         <div class="table-header">
-          <div>
-            <h2 id="tableTitle">Safe Screener</h2>
-            <p id="tableSubtitle">Run a scan to populate the table.</p>
+          <div class="table-heading-copy">
+            <h2 id="tableTitle">Screener</h2>
+            <p id="tableSubtitle">Click Scan to populate the table.</p>
           </div>
-          <label class="check-control">
-            <input id="showAllToggle" type="checkbox" checked />
-            <span>Show unavailable and ineligible rows</span>
-          </label>
+          <div class="table-source-toolbar" aria-label="Strategy source controls">
+            <div class="field csp-control csp-input-mode-control table-source-control" aria-label="CSP source">
+              <div class="segmented compact" id="cspInputModes" role="radiogroup" aria-label="CSP source">
+                <button class="segment active" data-csp-input-mode="manual" type="button">
+                  Manual
+                </button>
+                <button class="segment" data-csp-input-mode="auto" type="button">
+                  Auto
+                </button>
+              </div>
+            </div>
+
+            <div class="field cc-control cc-input-mode-control table-source-control" aria-label="Covered-call source" hidden>
+              <div class="segmented compact" id="ccInputModes" role="radiogroup" aria-label="Covered-call source">
+                <button class="segment active" data-cc-input-mode="manual" type="button">
+                  Manual
+                </button>
+                <button class="segment" data-cc-input-mode="auto" type="button">
+                  Auto
+                </button>
+              </div>
+            </div>
+            <label class="check-control" hidden>
+              <input id="showAllToggle" type="checkbox" />
+              <span>Hide unavailable and ineligible rows</span>
+            </label>
+          </div>
         </div>
 
         <div class="table-wrap">
           <table>
-            <thead>
+            <thead id="resultHead">
               <tr>
                 <th>Rank</th>
                 <th>Symbol</th>
@@ -154,13 +193,56 @@
               </tr>
             </thead>
             <tbody id="resultBody">
-              <tr>
+              <tr class="empty-row">
                 <td colspan="14" class="empty-cell">No scan has run yet.</td>
               </tr>
             </tbody>
           </table>
         </div>
+        <div id="ccListActions" class="cc-list-actions cc-control" hidden>
+          <button class="secondary-button add-entry-button" data-cc-add-entry type="button">
+            Add Entry
+          </button>
+        </div>
+        <div id="manualCspListActions" class="cc-list-actions manual-csp-control" hidden>
+          <button class="secondary-button add-entry-button" data-csp-add-entry type="button">
+            Add Entry
+          </button>
+        </div>
       </section>
+
+      <footer class="site-footer" aria-label="Footer navigation">
+        <div class="footer-inner">
+          <div class="footer-brand">
+            <p class="eyebrow">Wheel Strategy Screener</p>
+            <h2>End-of-week options workflow</h2>
+            <p>
+              Screen cash-secured puts, review covered calls, and keep Robinhood
+              credentials local to Chrome.
+            </p>
+          </div>
+          <nav class="footer-columns" aria-label="Footer links">
+            <div class="footer-column">
+              <h3>Product</h3>
+              <a href="/">Dashboard</a>
+              <a href="/guide.html">Setup Guide</a>
+              <a href="/helper.html">Install Helper</a>
+            </div>
+            <div class="footer-column">
+              <h3>Resources</h3>
+              <a href="/learn.html">Learn</a>
+              <a href="/faq.html">FAQ</a>
+              <a href="/calculator.html">Calculator</a>
+            </div>
+            <div class="footer-column">
+              <h3>Company</h3>
+              <a href="/contact.html">Contact Us</a>
+              <a href="/privacy.html">Privacy Policy</a>
+              <a href="/terms.html">Terms of Service</a>
+            </div>
+          </nav>
+        </div>
+      </footer>
     </main>
 
     <dialog class="onboarding-dialog" id="onboardingDialog" aria-labelledby="onboardingTitle">
@@ -168,7 +250,7 @@
         <div class="onboarding-heading">
           <div>
             <p class="eyebrow">First-time setup</p>
-            <h2 id="onboardingTitle">Scan your Robinhood screeners in three steps</h2>
+            <h2 id="onboardingTitle">Set up CSPs and covered calls</h2>
           </div>
           <button
             class="icon-button"
@@ -181,16 +263,16 @@
         </div>
         <ol class="onboarding-steps">
           <li>
-            <strong>Create three Robinhood screeners</strong>
-            <span>Use the exact Safe, Standard, and Mini names from the setup guide.</span>
-          </li>
-          <li>
             <strong>Install the Chrome helper</strong>
             <span>Log in directly on Robinhood and keep that browser tab open.</span>
           </li>
           <li>
+            <strong>Set up your strategy</strong>
+            <span>Use Manual or Auto strategy sources, save Robinhood screeners, type manual CSP symbols, enter CC rows, or import positions from Robinhood.</span>
+          </li>
+          <li>
             <strong>Run your scan</strong>
-            <span>Select Robinhood, choose a screener, and click Refresh.</span>
+            <span>Choose CSP or CC, select Mock or Robinhood, and click Scan.</span>
           </li>
         </ol>
         <div class="onboarding-actions">
@@ -198,6 +280,79 @@
           <button class="secondary-button" id="onboardingMockButton" type="button">
             Start with Mock Mode
           </button>
+        </div>
+      </div>
+    </dialog>
+
+    <dialog class="settings-dialog" id="screenersDialog" aria-labelledby="screenersDialogTitle">
+      <div class="settings-dialog-content">
+        <div class="settings-dialog-heading">
+          <div>
+            <p class="eyebrow">CSP Screeners</p>
+            <h2 id="screenersDialogTitle">Manage Robinhood screeners</h2>
+            <p>
+              Save the exact Robinhood screener names you want CSP mode to read. The selected
+              name is sent to the Chrome helper during a Robinhood scan.
+            </p>
+          </div>
+          <button
+            class="icon-button"
+            id="screenersDialogClose"
+            type="button"
+            aria-label="Close screener manager"
+          >
+            &times;
+          </button>
+        </div>
+        <div class="screener-manager-list" id="screenersList"></div>
+        <div class="screener-add-row">
+          <input
+            id="newScreenerInput"
+            type="text"
+            autocomplete="off"
+            placeholder="Robinhood screener name"
+            aria-label="New Robinhood screener name"
+          />
+          <button id="addScreenerButton" class="secondary-button" type="button">Add</button>
+        </div>
+      </div>
+    </dialog>
+
+    <dialog class="settings-dialog" id="settingsDialog" aria-labelledby="settingsDialogTitle">
+      <div class="settings-dialog-content">
+        <div class="settings-dialog-heading">
+          <div>
+            <p class="eyebrow">Settings</p>
+            <h2 id="settingsDialogTitle">Strategy settings</h2>
+            <p>
+              Export or import saved strategy settings. Covered-call entries, scan results,
+              manual CSP symbols, imported Robinhood positions, Robinhood quotes, helper status,
+              and CSV data are not included.
+            </p>
+          </div>
+          <button
+            class="icon-button"
+            id="settingsDialogClose"
+            type="button"
+            aria-label="Close settings"
+          >
+            &times;
+          </button>
+        </div>
+        <div class="settings-actions">
+          <button id="exportSettingsButton" class="primary-button" type="button">
+            Export Settings
+          </button>
+          <button id="importSettingsButton" class="secondary-button" type="button">
+            Import Settings
+          </button>
+          <input
+            id="settingsImportInput"
+            class="file-input"
+            type="file"
+            accept="application/json,.json"
+            hidden
+          />
         </div>
       </div>
     </dialog>

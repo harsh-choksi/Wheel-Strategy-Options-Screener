@@ -1,0 +1,193 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <meta name="description" content="Frequently asked questions for Wheel Strategy Screener." />
+    <title>FAQ - Wheel Strategy Screener</title>
+    <link rel="icon" href="/favicon.ico?v=0.2.6" sizes="any" />
+    <link rel="icon" href="/favicon-32.png?v=0.2.6" sizes="32x32" type="image/png" />
+    <link rel="icon" href="/favicon-16.png?v=0.2.6" sizes="16x16" type="image/png" />
+    <link rel="apple-touch-icon" href="/apple-touch-icon.png?v=0.2.6" />
+    <link rel="stylesheet" href="/styles.css" />
+  </head>
+  <body>
+    <main class="app-shell simple-page">
+      <header class="topbar page-topbar">
+        <div class="title-block">
+          <p class="eyebrow">Resources</p>
+          <h1>FAQ</h1>
+          <p class="page-intro">
+            Practical answers for wheel strategy basics, helper installation, Robinhood
+            scanning, local settings, statuses, and Scan vs Refresh.
+          </p>
+        </div>
+        <div class="topbar-actions">
+          <a class="secondary-button" href="/guide.html">Setup Guide</a>
+          <a class="secondary-button" href="/">Back to Screener</a>
+        </div>
+      </header>
+
+      <section class="guide-section">
+        <dl class="faq-list">
+          <div>
+            <dt>Why is this called a wheel strategy?</dt>
+            <dd>
+              It is a repeatable options workflow that usually starts with selling cash-secured
+              puts on stocks you would be willing to own, then selling covered calls if shares
+              are assigned or already owned. It can generate premium, but it still has market,
+              assignment, liquidity, and opportunity-cost risk.
+            </dd>
+          </div>
+          <div>
+            <dt>What is the difference between CSP and CC mode?</dt>
+            <dd>
+              CSP Manual starts from typed symbols, while CSP Auto starts from a saved Robinhood
+              screener. CC Manual starts from covered-call rows you type, while CC Auto imports
+              stock positions from Robinhood, then evaluates Sell Call quotes for positions you already own.
+            </dd>
+          </div>
+          <div>
+            <dt>What does Scan vs Refresh mean?</dt>
+            <dd>
+              Scan is the first data collection for the active strategy. Once data exists,
+              the button becomes Refresh and rereads Robinhood screeners or CC symbols,
+              TradingView data, and option chains.
+            </dd>
+          </div>
+          <div>
+            <dt>Why do I need the Chrome helper?</dt>
+            <dd>
+              Robinhood does not provide a public screener, account-position, and option-chain
+              API for this workflow. The helper reads visible symbols, stock position rows, and
+              quote values from your logged-in Chrome tab.
+            </dd>
+          </div>
+          <div>
+            <dt>Does the site receive my Robinhood password, MFA code, or cookies?</dt>
+            <dd>
+              No. The helper runs locally in Chrome. It sends symbols and option quote values
+              for calculation, not Robinhood passwords, MFA codes, cookies, or account sessions.
+            </dd>
+          </div>
+          <div>
+            <dt>Where are my saved CSP screener names stored?</dt>
+            <dd>
+              They are stored in browser localStorage on your device. They are not global
+              website settings and are not written to the server.
+            </dd>
+          </div>
+          <div>
+            <dt>Do covered-call rows stay after refreshing the page?</dt>
+            <dd>
+              Yes. Symbol, Average Cost, and Contracts are saved locally in your browser.
+              Scanned TradingView rows, imported Robinhood positions, and Robinhood option quotes are not persisted.
+            </dd>
+          </div>
+          <div>
+            <dt>How are Auto CC positions converted to contracts?</dt>
+            <dd>
+              The helper imports symbol, shares, and average cost from every account it can
+              select. Contracts are floored whole contracts: shares divided by 100. Rows below
+              100 shares stay visible with 0 contracts, but they are not used for covered-call scans.
+            </dd>
+          </div>
+          <div>
+            <dt>Can I enter duplicate covered-call tickers?</dt>
+            <dd>
+              Yes. Multiple rows can use the same symbol with different average costs or
+              contract counts. The helper reads that symbol's option chain once per Scan or
+              Refresh, then the server applies the shared quote list to each row.
+            </dd>
+          </div>
+          <div>
+            <dt>Why can option-chain reads feel slow?</dt>
+            <dd>
+              The helper opens Robinhood option chains and scrolls the default expiration to
+              capture visible quotes. Keep Robinhood open and avoid interacting with the tab
+              during a scan.
+            </dd>
+          </div>
+          <div>
+            <dt>What does SKIP mean?</dt>
+            <dd>
+              In CSP mode, SKIP means TradingView passed but no below-current Sell Put met
+              the selected return rule. In CC mode, SKIP means no usable positive-bid call
+              quote was available under the covered-call strike rules.
+            </dd>
+          </div>
+          <div>
+            <dt>What does Unavailable mean?</dt>
+            <dd>
+              TradingView data or Robinhood option quotes could not be read for that row.
+              Keep Robinhood open, confirm the symbol or screener exists, and try Refresh.
+            </dd>
+          </div>
+          <div>
+            <dt>Why do I sometimes see current-only data?</dt>
+            <dd>
+              TradingView may expose current price even when analyst target data is missing.
+              CC mode can still evaluate calls using the current price when available and
+              leaves Min, Avg, and Max blank. CSP mode shows current-only rows as Unavailable
+              because CSP eligibility requires the minimum target above current price.
+            </dd>
+          </div>
+          <div>
+            <dt>Can quotes be stale or incomplete?</dt>
+            <dd>
+              Yes. TradingView data and Robinhood option quotes can be delayed, unavailable,
+              or incomplete. Always verify live quotes, spread, expiration, liquidity, and
+              order details in your brokerage before trading.
+            </dd>
+          </div>
+          <div>
+            <dt>What does settings export include?</dt>
+            <dd>
+              Export includes strategy settings such as CSP screener names, selected data source,
+              Manual/Auto strategy source modes, portfolio value, and return targets. Older exported
+              screener or robinhood source values import as Auto. It excludes covered-call rows,
+              scan results, Robinhood quotes, helper status, and CSV output.
+            </dd>
+          </div>
+          <div>
+            <dt>How do I reset local settings?</dt>
+            <dd>
+              Clear this site's browser data or localStorage. That resets saved CSP screener
+              names and covered-call rows on that browser/device only.
+            </dd>
+          </div>
+        </dl>
+      </section>
+
+      <footer class="site-footer" aria-label="Footer navigation">
+        <div class="footer-inner">
+          <div class="footer-brand">
+            <p class="eyebrow">Wheel Strategy Screener</p>
+            <h2>End-of-week options workflow</h2>
+            <p>Screen cash-secured puts, review covered calls, and keep Robinhood credentials local to Chrome.</p>
+          </div>
+          <nav class="footer-columns" aria-label="Footer links">
+            <div class="footer-column">
+              <h3>Product</h3>
+              <a href="/">Dashboard</a>
+              <a href="/guide.html">Setup Guide</a>
+              <a href="/helper.html">Install Helper</a>
+            </div>
+            <div class="footer-column">
+              <h3>Resources</h3>
+              <a href="/learn.html">Learn</a>
+              <a href="/faq.html">FAQ</a>
+              <a href="/calculator.html">Calculator</a>
+            </div>
+            <div class="footer-column">
+              <h3>Company</h3>
+              <a href="/contact.html">Contact Us</a>
+              <a href="/privacy.html">Privacy Policy</a>
+              <a href="/terms.html">Terms of Service</a>
+            </div>
+          </nav>
+        </div>
+      </footer>
+    </main>
+  </body>
+</html>

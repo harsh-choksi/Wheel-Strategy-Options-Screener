@@ -1,15 +1,21 @@
 {
-  "name": "wheel-strategy-options-screener",
+  "name": "wheel-strategy-screener",
   "version": "0.1.0",
   "private": true,
-  "description": "Robinhood and TradingView wheel strategy screener with a local Chrome extension helper.",
+  "description": "End-of-week CSP and covered-call screener using TradingView data and a local Robinhood Chrome helper.",
   "main": "src/server.js",
   "scripts": {
     "start": "node src/server.js",
-    "test": "node --test \"test/*.test.js\""
+    "test": "node --test \"test/*.test.js\"",
+    "test:smoke": "node --test test/smoke.test.js"
   },
   "engines": {
     "node": ">=20"
   },
-  "dependencies": {}
+  "dependencies": {
+    "nodemailer": "^6.9.16"
+  },
+  "devDependencies": {
+    "playwright": "^1.60.0"
+  }
 }

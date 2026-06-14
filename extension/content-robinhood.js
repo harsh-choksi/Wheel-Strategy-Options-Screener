@@ -627,6 +627,235 @@
     return Number.isFinite(parsed) ? parsed : null;
   }
 
+  function stockSymbolFromAnchor(anchor) {
+    const match = String(anchor?.getAttribute?.("href") || "").match(
+      /\/(?:stocks|etfs)\/([A-Z. -]{1,8})(?:[/?#]|$)/i
+    );
+    return match ? normalizeSymbol(match[1]) : null;
+  }
+
+  function parseShares(text) {
+    const normalized = normalizeText(text).replace(/,/g, "");
+    const afterLabel = normalized.match(/\b(?:shares?|quantity|qty)\b[^\d]{0,30}(\d+(?:\.\d+)?)/i);
+    if (afterLabel) {
+      const parsed = Number.parseFloat(afterLabel[1]);
+      return Number.isFinite(parsed) ? parsed : null;
+    }
+
+    const beforeLabel = normalized.match(/(\d+(?:\.\d+)?)\s*(?:shares?|shs?)\b/i);
+    if (beforeLabel) {
+      const parsed = Number.parseFloat(beforeLabel[1]);
+      return Number.isFinite(parsed) ? parsed : null;
+    }
+
+    return null;
+  }
+
+  function parseAverageCost(text) {
+    const normalized = normalizeText(text);
+    const labeled = normalized.match(
+      /\b(?:average\s+cost|avg\.?\s+cost|cost\s+basis)\b[^\d$-]{0,80}(\$?\s*-?\d[\d,]*(?:\.\d+)?)/i
+    );
+    if (labeled) {
+      return parseMoney(labeled[1]);
+    }
+
+    const perShare = normalized.match(
+      /(\$?\s*-?\d[\d,]*(?:\.\d+)?)\s*(?:average\s+cost|avg\.?\s+cost|cost\s+basis)\b/i
+    );
+    if (perShare) {
+      return parseMoney(perShare[1]);
+    }
+
+    return null;
+  }
+
+  function positionRowAncestor(anchor) {
+    let current = anchor;
+    let best = null;
+
+    for (let depth = 0; current && depth < 10; depth += 1) {
+      if (visible(current)) {
+        const text = normalizeText(current.innerText || current.textContent || "");
+        const shares = parseShares(text);
+        const averageCost = parseAverageCost(text);
+        const rect = current.getBoundingClientRect();
+        const rowSized = rect.width >= 240 && rect.height >= 32 && rect.height <= 260;
+
+        if (Number.isFinite(shares) && Number.isFinite(averageCost) && rowSized) {
+          best = current;
+        }
+      }
+
+      current = current.parentElement;
+    }
+
+    return best;
+  }
+
+  function currentAccountName() {
+    const candidates = [...document.querySelectorAll("button, [role='button'], [aria-haspopup], [data-testid]")]
+      .filter(visible)
+      .map((element) => normalizeText(elementLabel(element)))
+      .filter((label) =>
+        /\b(?:individual|brokerage|ira|roth|traditional|margin|cash|retirement|account|investing)\b/i.test(label)
+      )
+      .sort((a, b) => a.length - b.length);
+
+    return candidates[0] || "Robinhood";
+  }
+
+  function collectStockPositionsFromPage(accountName = currentAccountName()) {
+    const positions = [];
+    const seen = new Set();
+
+    for (const anchor of stockAnchors(document).filter(visible)) {
+      const symbol = stockSymbolFromAnchor(anchor);
+      if (!symbol) {
+        continue;
+      }
+
+      const row = positionRowAncestor(anchor);
+      const text = normalizeText(row?.innerText || row?.textContent || "");
+      const shares = parseShares(text);
+      const averageCost = parseAverageCost(text);
+
+      if (!Number.isFinite(shares) || shares <= 0 || !Number.isFinite(averageCost)) {
+        continue;
+      }
+
+      const key = `${accountName}|${symbol}|${shares}|${averageCost}`;
+      if (seen.has(key)) {
+        continue;
+      }
+      seen.add(key);
+      positions.push({
+        accountName,
+        symbol,
+        shares,
+        averageCost
+      });
+    }
+
+    return positions;
+  }
+
+  function accountDropdownCandidates() {
+    return [...document.querySelectorAll("button, [role='button'], [aria-haspopup='menu'], [aria-haspopup='listbox']")]
+      .filter((element) => {
+        if (!visible(element)) {
+          return false;
+        }
+
+        const label = elementLabel(element);
+        return /\b(?:account|individual|brokerage|ira|roth|traditional|margin|cash|retirement|investing)\b/i.test(label);
+      })
+      .sort((a, b) => {
+        const aLabel = elementLabel(a);
+        const bLabel = elementLabel(b);
+        const aAccount = /\baccount\b/i.test(aLabel) ? 0 : 1;
+        const bAccount = /\baccount\b/i.test(bLabel) ? 0 : 1;
+        return aAccount - bAccount || aLabel.length - bLabel.length;
+      });
+  }
+
+  function accountOptionLabels() {
+    const labels = [];
+    const seen = new Set();
+
+    for (const element of [...document.querySelectorAll("button, [role='menuitem'], [role='option'], [role='button'], a, div")].filter(visible)) {
+      const label = elementLabel(element);
+      if (
+        !label ||
+        label.length > 80 ||
+        !/\b(?:individual|brokerage|ira|roth|traditional|margin|cash|retirement|account)\b/i.test(label) ||
+        /\b(?:add|open|settings|statement|transfer|support|help)\b/i.test(label)
+      ) {
+        continue;
+      }
+
+      if (!seen.has(label)) {
+        seen.add(label);
+        labels.push(label);
+      }
+    }
+
+    return labels;
+  }
+
+  function clickAccountOption(label) {
+    const candidates = [...document.querySelectorAll("button, [role='menuitem'], [role='option'], [role='button'], a, div")]
+      .filter((element) => visible(element) && elementLabel(element) === label)
+      .sort((a, b) => candidateClickScore(a, label) - candidateClickScore(b, label));
+
+    const target = candidates[0];
+    if (!target) {
+      return false;
+    }
+
+    clickLikeUser(target);
+    return true;
+  }
+
+  async function openAccountDropdown() {
+    for (const candidate of accountDropdownCandidates().slice(0, 4)) {
+      clickLikeUser(candidate);
+      await wait(400);
+      if (accountOptionLabels().length > 1) {
+        return true;
+      }
+    }
+
+    return false;
+  }
+
+  async function extractStockPositions() {
+    await waitForRobinhoodApp();
+
+    if (!isLoggedIn()) {
+      throw new Error("Log in to Robinhood in the opened Chrome tab, then return and refresh.");
+    }
+
+    const positions = [];
+    const seenRows = new Set();
+    const collect = (accountName = currentAccountName()) => {
+      for (const position of collectStockPositionsFromPage(accountName)) {
+        const key = `${position.accountName}|${position.symbol}|${position.shares}|${position.averageCost}`;
+        if (!seenRows.has(key)) {
+          seenRows.add(key);
+          positions.push(position);
+        }
+      }
+    };
+
+    await wait(900);
+    collect();
+
+    if (await openAccountDropdown()) {
+      const labels = accountOptionLabels();
+      for (const label of labels) {
+        if (!(await openAccountDropdown())) {
+          break;
+        }
+        if (!clickAccountOption(label)) {
+          continue;
+        }
+        await wait(1200);
+        collect(label);
+      }
+    }
+
+    if (positions.length === 0) {
+      throw new Error("No stock positions with shares and average cost were detected.");
+    }
+
+    return {
+      positions,
+      source: "robinhood-positions",
+      url: window.location.href
+    };
+  }
+
   function optionButtonCandidates(label) {
     const target = normalizeText(label);
     return [...document.querySelectorAll("button, [role='button']")]
@@ -1127,7 +1356,9 @@
     };
   }
 
-  async function extractPutOptionQuotes(symbol, currentPrice) {
+  async function extractOptionQuotes(symbol, currentPrice, optionType) {
+    const normalizedType = optionType === "call" ? "call" : "put";
+    const optionLabel = normalizedType === "call" ? "Call" : "Put";
     await waitForRobinhoodApp();
 
     if (!isLoggedIn()) {
@@ -1141,8 +1372,8 @@
     if (!(await ensureOptionSide(symbol, "sell"))) {
       throw new Error("Could not select Sell on the Robinhood option chain.");
     }
-    if (!(await ensureOptionMode(symbol, "sell", "put"))) {
-      throw new Error("Could not select Put on the Robinhood option chain.");
+    if (!(await ensureOptionMode(symbol, "sell", normalizedType))) {
+      throw new Error(`Could not select ${optionLabel} on the Robinhood option chain.`);
     }
     await dismissOptionsNotice();
     await waitForOptionsChain(symbol);
@@ -1157,10 +1388,19 @@
     return {
       symbol,
       currentPrice,
+      optionType: normalizedType,
       quotes: collected.quotes,
       diagnostics: collected.diagnostics,
       url: window.location.href
     };
+  }
+
+  function extractPutOptionQuotes(symbol, currentPrice) {
+    return extractOptionQuotes(symbol, currentPrice, "put");
+  }
+
+  function extractCallOptionQuotes(symbol, currentPrice) {
+    return extractOptionQuotes(symbol, currentPrice, "call");
   }
 
   chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
@@ -1179,8 +1419,22 @@
       return true;
     }
 
+    if (message?.action === "extractStockPositions") {
+      extractStockPositions()
+        .then(sendResponse)
+        .catch((error) => sendResponse({ error: error.message }));
+      return true;
+    }
+
     if (message?.action === "extractPutOptionQuotes") {
       extractPutOptionQuotes(message.symbol, message.currentPrice)
+        .then(sendResponse)
+        .catch((error) => sendResponse({ error: error.message }));
+      return true;
+    }
+
+    if (message?.action === "extractCallOptionQuotes") {
+      extractCallOptionQuotes(message.symbol, message.currentPrice)
         .then(sendResponse)
         .catch((error) => sendResponse({ error: error.message }));
       return true;

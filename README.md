@@ -1,12 +1,11 @@
-# Wheel Strategy Options Screener
+# Wheel Strategy Screener
 
-Robinhood + TradingView dashboard for screening wheel strategy candidates from three Robinhood lists:
+Robinhood + TradingView dashboard for screening wheel strategy candidates and covered-call positions.
 
-- `Wheel Strategy Screener Safe`
-- `Wheel Strategy Screener`
-- `Wheel Strategy Screener Mini`
+The site has two workflows:
 
-The site scans the selected Robinhood list, checks TradingView forecast data, reads Robinhood Sell Put option quotes for TradingView-eligible stocks, calculates allocation, sizes contracts, and exports the table to CSV.
+- `CSP`: scans a user-saved Robinhood screener name or manual symbol list, checks TradingView forecast data, reads Robinhood Sell Put option quotes for TradingView-eligible stocks, calculates allocation, sizes contracts, and exports the table to CSV.
+- `CC`: lets users enter covered-call positions manually or import stock positions from Robinhood, checks TradingView data, reads Robinhood Sell Call quotes, selects call strikes, and exports covered-call return estimates.
 
 This is a personal/private-beta tool, not financial advice. Verify prices, option chains, collateral, assignment risk, and buying power before trading.
 
@@ -16,7 +15,9 @@ The public site includes:
 
 - A short first-visit walkthrough on the dashboard.
 - A permanent setup guide at `https://wheelstrategyscreener.com/guide.html`.
-- Copy buttons for the exact Robinhood screener names.
+- Learn, FAQ, Calculator, Contact, Privacy Policy, and Terms of Service pages.
+- CSP screener name management plus manual CSP symbol rows stored locally.
+- JSON Settings export/import for strategy settings.
 - Helper installation, scan instructions, result explanations, privacy notes, and troubleshooting.
 
 ## How It Works
@@ -26,23 +27,32 @@ The public website does not collect Robinhood credentials. A local Chrome helper
 Workflow:
 
 1. Open `https://wheelstrategyscreener.com`.
-2. Follow `/guide.html` to create the three Robinhood screeners.
+2. Follow `/guide.html` to create one or more Robinhood screeners and save their exact names in the dashboard.
 3. Install the Chrome helper from `/helper.html`.
-4. Refresh the screener until it shows `Helper ready`.
+4. Reload the screener page until it shows `Helper ready`.
 5. Click `Open Robinhood`.
 6. Log into Robinhood normally in Chrome and keep the tab open.
 7. Return to the screener.
-8. Choose `Safe`, `Standard`, or `Mini`.
-9. Set the portfolio value and CSP return target.
-10. Choose `Robinhood` as the source and click `Refresh`.
-11. The helper opens the matching Robinhood list and sends ticker symbols to the site.
-12. The server scans TradingView for current price and analyst targets.
-13. The helper checks full default-expiration Robinhood Sell Put chains for TradingView-eligible symbols.
-14. The server selects qualifying CSP strikes, sizes contracts, and returns the ranked table.
+8. Choose `CSP` or `CC`.
+9. For CSPs, keep the table toolbar on `Manual` to type symbols, or switch to `Auto` to use a saved Robinhood screener, then set portfolio value and return target.
+10. For CCs, keep `Manual` to enter rows, or switch to `Auto` to import visible stock positions from Robinhood.
+11. Choose `Robinhood` as the source and click `Scan`. After results exist, the same button becomes `Refresh` for a fresh read.
+12. For CSP screeners, the helper opens the matching Robinhood list and sends ticker symbols to the site. Manual CSP symbols skip this list extraction.
+13. The server scans TradingView for current price and analyst targets.
+14. The helper checks full default-expiration Robinhood Sell Put or Sell Call chains.
+15. The server selects qualifying strikes, sizes or summarizes the rows, and returns the table.
+
+`Scan` is the first data collection for the active strategy. `Refresh` appears after that strategy has results and rereads Robinhood, TradingView, and the relevant option chains. Changing portfolio value, covered-call average cost/contracts, or Weekly/Yearly return reuses cached scan data when possible.
+
+Covered-call rows and manual CSP symbols are saved locally in the browser with `localStorage`, so refreshing the tab keeps manually entered rows. Custom CSP screeners are also saved locally. Scanned TradingView data, Robinhood option quotes, imported Robinhood positions, helper status, and CSV data are not persisted; clearing site data resets the local lists.
+
+The Settings button exports/imports strategy settings only: custom CSP screeners, selected CSP screener, portfolio value, CSP weekly return, CC weekly return, active strategy, selected data source, and CSP/CC strategy source modes as `manual` or `auto`. Older settings files that contain `screener` or `robinhood` source values are imported as `auto`. Settings files intentionally exclude manual CSP symbols, covered-call rows, scan results, option quotes, imported Robinhood positions, helper status, and CSV data.
+
+The table toolbar filter appears only in `Auto` mode. `Hide unavailable and ineligible rows` is unchecked by default, so unavailable and ineligible rows remain visible unless the user chooses to hide them. CSP `SKIP` rows stay visible when the filter is enabled because they passed the TradingView target check but did not meet the selected option-return rule.
 
 Mock mode works without the helper and uses built-in sample symbols with live TradingView data.
 
-## Create The Robinhood Screeners
+## Create And Save Robinhood Screeners
 
 Robinhood's web flow is:
 
@@ -51,17 +61,19 @@ Robinhood's web flow is:
 3. Select `Create watchlist or screener`.
 4. Choose the stock screener option.
 5. Enter a screener name, add filters using `+`, review Preview, and select Create.
-6. Repeat until all three screeners exist.
+6. Repeat for as many screeners as you want.
+7. In the dashboard, use `Screener -> Manage` to save each exact Robinhood screener name.
+8. Select the saved screener from the dropdown before scanning CSPs.
 
-Use these exact names:
+Starter examples:
 
 ```text
-Wheel Strategy Screener Safe
-Wheel Strategy Screener
-Wheel Strategy Screener Mini
+Wheel Strategy 1
+Wheel Strategy 2
+Wheel Strategy 3
 ```
 
-The names must match exactly because the dashboard maps its Safe, Standard, and Mini tabs to those lists. Users choose filters that fit their own strategy and risk tolerance. The project does not recommend investment filters.
+These names are optional starter examples only. Users can save any Robinhood screener names in the dashboard. Saved names are stored locally in that user's browser, not globally on the website. The selected saved name must match Robinhood exactly because the helper clicks that visible screener by name. Users choose filters that fit their own strategy and risk tolerance. The project does not recommend investment filters.
 
 Robinhood references:
 
@@ -91,10 +103,10 @@ Private beta install:
 5. Enable `Developer mode`.
 6. Click `Load unpacked`.
 7. Select the extracted helper folder.
-8. Confirm Chrome shows helper version `0.2.5`.
-9. Refresh the screener.
+8. Confirm Chrome shows helper version `0.2.6`.
+9. Reload the screener page.
 
-## Screener Logic
+## CSP Screener Logic
 
 Eligibility:
 
@@ -112,7 +124,7 @@ allocation_percent = weight / sum(all_weights)
 CSP strike:
 
 ```text
-weekly_return_target defaults to 0.02
+weekly_return_target defaults to 0.01
 yearly_return = (1 + weekly_return_target)^52 - 1
 
 For each TradingView-eligible symbol:
@@ -126,7 +138,8 @@ For each TradingView-eligible symbol:
 ```
 
 The dashboard shows linked `Weekly %` and `Yearly %` inputs. Weekly return controls the
-option-chain rule. Yearly return is compounded over 52 weeks.
+option-chain rule. CSP mode defaults to `1%` weekly. Its yearly display is compounded over
+52 weeks: `(1 + weekly)^52 - 1`.
 
 If no below-current put meets the selected bid/strike return rule, the row is marked `SKIP`.
 `SKIP` rows are not allocated and do not receive contracts.
@@ -137,7 +150,7 @@ Status meanings:
 - `SKIP`: TradingView passed, but no default-expiration below-current put has `bid / strike` at or above the selected weekly return.
 - `Below min`: TradingView minimum analyst target is not above current price.
 - `Unused`: The row qualifies, but portfolio sizing gives it zero contracts.
-- `Unavailable`: TradingView or Robinhood quote data could not be read.
+- `Unavailable`: TradingView or Robinhood quote data could not be read. If TradingView has current price but no analyst target, CSP shows the current price as Unavailable and does not allocate.
 
 Quote columns:
 
@@ -156,9 +169,66 @@ actual_used = contracts * collateral_per_contract
 
 If an eligible stock receives zero contracts, it is marked `Unused`, removed from the used set, and allocation/contract sizing are recalculated.
 
-Changing the portfolio value after a scan recalculates allocation and contract sizing immediately without re-reading Robinhood or TradingView. Changing the weekly/yearly return target reuses the latest TradingView rows and cached Robinhood option quotes, then reselects CSP strikes and resizes contracts. Click `Refresh` when you want new symbols, current TradingView data, and fresh Robinhood option quotes.
+Changing the portfolio value after a scan recalculates allocation and contract sizing immediately without re-reading Robinhood or TradingView. Changing the weekly/yearly return target reuses the latest TradingView rows and cached Robinhood option quotes, then reselects CSP strikes and resizes contracts. Click `Refresh` after a scan when you want new symbols, current TradingView data, and fresh Robinhood option quotes.
 
-Option-chain extraction can take time because the helper opens each TradingView-eligible symbol's Robinhood chain and scrolls the default-expiration Sell Put quotes. Keep the Robinhood tab open and avoid interacting with it during a scan.
+Option-chain extraction can take time because the helper opens each unique TradingView-eligible symbol's Robinhood chain and scrolls the default-expiration Sell Put quotes. Duplicate symbols are read once per Scan or Refresh. Keep the Robinhood tab open and avoid interacting with it during a scan.
+
+## Covered Call Logic
+
+The `CC` tab is for positions the user already owns. Leave the table toolbar on `Manual` to enter rows directly in the Covered Calls list:
+
+```text
+Symbol | Average Cost | Contracts
+```
+
+Average cost is per share. Contracts are entered directly by the user. Use `Add Entry` for more rows and the red `x`/`&times;` beside a symbol to remove a row.
+These manually entered rows persist locally in the same browser across page refreshes. The app only stores `symbol`, `averageCost`, and `contracts`; it does not store scan results or option quote snapshots.
+Multiple rows may use the same ticker for separate lots with different average costs or contract counts. During each Scan or Refresh, the helper reads that ticker's Robinhood Sell Call option chain once, then the server applies the shared raw call quotes separately to every matching row.
+
+Switch the table toolbar to `Auto` to have the helper open `https://robinhood.com/account/investing`, iterate account choices in the account dropdown, and import visible `symbol`, `shares`, and `average cost` rows. Contracts are calculated as `floor(shares / 100)`. Rows below 100 shares remain visible with `0` contracts, but they are not used for covered-call option-chain reads.
+
+CC mode defaults to `2%` weekly. Its yearly display uses a simple annualized conversion:
+
+```text
+yearly_return = weekly_return * 52
+weekly_return = yearly_return / 52
+```
+
+For each valid row:
+
+```text
+return_base = max(TradingView current price, average cost)
+open https://robinhood.com/options/chains/{SYMBOL}
+select Sell and Call
+keep Robinhood's default expiration
+scrape the full visible/scrollable strike and bid chain
+primary rule:
+  consider strikes strictly above return_base
+  return_percent = bid / return_base
+  choose the highest strike where return_percent >= weekly_return_target
+fallback rule:
+  if no primary strike qualifies, choose the closest positive-bid strike strictly above average cost
+  if no above-cost strike has a positive bid, choose the highest positive-bid strike below average cost
+```
+
+If no positive-bid call quote exists, the row is marked `SKIP`. A below-cost fallback can reduce or even make total assignment return negative, but it is only used when no positive-bid above-cost call exists. If TradingView or Robinhood call data cannot be read, the row is marked `Unavailable`. If TradingView analyst targets are unavailable but current price can still be read, CC mode can continue with current-only data and leaves Min/Avg/Max blank.
+
+CC total return:
+
+```text
+weekly_return_dollars = sum(bid * 100 * contracts)
+weekly_return_percent = weekly_return_dollars / sum(return_base * 100 * contracts)
+total_return_dollars = ((strike - average_cost) + bid) * 100 * contracts
+total_return_percent = total_return_dollars / (average_cost * 100 * contracts)
+```
+
+The CC summary cards show:
+
+- `Positions`: nonblank symbol rows in the Covered Calls list.
+- `Weekly Return`: premium-only dollars and percent from selected calls.
+- `Total Return`: assignment gain plus premium, with percent based on average-cost basis.
+
+Changing Average Cost, Contracts, Weekly, or Yearly return after a CC scan reuses cached call quotes and reselects strikes without re-reading Robinhood or TradingView. Changing a symbol requires `Scan` if no CC data exists yet, or `Refresh` after results exist, because the app needs new TradingView data and a new Robinhood option-chain snapshot.
 
 ## Environment
 
@@ -171,7 +241,20 @@ NODE_ENV=production
 TRADINGVIEW_CACHE_TTL_MS=900000
 TRADINGVIEW_CONCURRENCY=8
 TRADINGVIEW_REQUEST_TIMEOUT_MS=8000
+
+CONTACT_TO_EMAIL=your_contact_email@example.com
+CONTACT_FROM_EMAIL=
+SMTP_HOST=
+SMTP_PORT=587
+SMTP_SECURE=false
+SMTP_USER=
+SMTP_PASS=
 ```
+
+The contact form posts to `/api/contact` and sends mail through SMTP. If the
+SMTP fields are empty, the endpoint returns a visible configuration error
+instead of dropping messages. Use the SMTP host, port, secure mode, username,
+and app password supplied by your email provider.
 
 ## Local Development
 
@@ -187,6 +270,19 @@ Run tests:
 powershell -ExecutionPolicy Bypass -File .\scripts\test.ps1
 ```
 
+Run the headless route smoke test:
+
+```powershell
+npm run test:smoke
+```
+
+The smoke test starts `src/server.js` itself on `HOST=127.0.0.1` with an
+ephemeral port, waits for the printed `Wheel Strategy Screener running at ...`
+URL, then checks the primary static routes with Playwright. If Codex's in-app
+browser cannot attach to the local page, that can be a sandbox/browser-attach
+limitation rather than an app failure. Final manual verification is opening the
+printed local URL in a normal browser.
+
 Start locally:
 
 ```powershell
@@ -196,7 +292,7 @@ powershell -ExecutionPolicy Bypass -File .\scripts\start.ps1
 Open:
 
 ```text
-http://localhost:5173
+Use the URL printed by the server, for example http://127.0.0.1:5173
 ```
 
 Stop:
@@ -233,10 +329,10 @@ After any extension change, download/reload the helper from `/helper.html`.
 ## Project Layout
 
 - `src/server.js`: HTTP server, API routes, static assets, helper ZIP download.
-- `src/public/`: dashboard, first-visit onboarding, setup guide, and helper install page.
+- `src/public/`: dashboard, onboarding, setup guide, helper install page, calculator, contact form, FAQ, legal, and learning pages.
 - `src/lib/analyze.js`: symbol source handling and TradingView scan orchestration.
 - `src/lib/calculations.js`: allocation and contract sizing.
-- `src/lib/options.js`: Robinhood put quote normalization and CSP strike selection.
+- `src/lib/options.js`: Robinhood put/call quote normalization, CSP strike selection, and covered-call strike selection.
 - `src/lib/tradingview.js`: TradingView forecast lookup, timeout, and cache.
 - `extension/`: Chrome helper that opens Robinhood lists and option chains.
 - `test/`: calculation, TradingView parsing, and API tests.

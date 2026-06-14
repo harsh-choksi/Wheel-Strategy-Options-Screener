@@ -3,44 +3,54 @@
   <head>
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
-    <title>Install Helper - Wheel Strategy Options Screener</title>
-    <link rel="icon" href="/favicon.ico?v=0.2.5" sizes="any" />
-    <link rel="icon" href="/favicon-32.png?v=0.2.5" sizes="32x32" type="image/png" />
-    <link rel="icon" href="/favicon-16.png?v=0.2.5" sizes="16x16" type="image/png" />
-    <link rel="apple-touch-icon" href="/apple-touch-icon.png?v=0.2.5" />
+    <title>Install Helper - Wheel Strategy Screener</title>
+    <link rel="icon" href="/favicon.ico?v=0.2.6" sizes="any" />
+    <link rel="icon" href="/favicon-32.png?v=0.2.6" sizes="32x32" type="image/png" />
+    <link rel="icon" href="/favicon-16.png?v=0.2.6" sizes="16x16" type="image/png" />
+    <link rel="apple-touch-icon" href="/apple-touch-icon.png?v=0.2.6" />
     <link rel="stylesheet" href="/styles.css" />
   </head>
-  <body>
-    <main class="app-shell helper-page">
-      <header class="topbar">
-        <div>
+  <body class="simple-shell">
+    <header class="page-hero-band">
+      <div class="page-inner page-hero-inner">
+        <div class="title-block">
           <p class="eyebrow">Chrome Helper</p>
           <h1>Install Robinhood Helper</h1>
+          <p class="page-intro">
+            Load the local Chrome helper so the screener can read Robinhood screeners
+            and option-chain quotes from your own browser.
+          </p>
         </div>
         <div class="topbar-actions">
           <a class="secondary-button" href="/guide.html">Setup Guide</a>
           <a class="secondary-button" href="/">Back to Screener</a>
         </div>
-      </header>
+      </div>
+    </header>
 
+    <main class="app-shell helper-page">
       <section class="connection-band">
         <div class="helper-hero">
-          <div>
+          <div class="helper-hero-copy">
             <h2>Private beta install</h2>
             <p>
-              The helper runs in your Chrome browser, reads only ticker symbols from your
-              Robinhood lists and put chains, and sends symbols plus quote values to the screener.
-              Current helper version: <strong>0.2.5</strong>.
+              The helper runs in your Chrome browser, reads ticker symbols from your
+              Robinhood screeners, reads option-chain quote values, and sends only the
+              values needed for screener calculations. Current helper version:
+              <strong>0.2.6</strong>.
+            </p>
+            <p>
+              Chrome does not allow this private helper to install itself automatically.
+              Download the ZIP, load it unpacked, and reload the extension after each
+              helper update.
             </p>
           </div>
-          <a class="primary-button" href="/downloads/wheel-screener-helper.zip">
-            Download ZIP
-          </a>
+          <div class="helper-hero-action">
+            <a class="primary-button" href="/downloads/wheel-screener-helper.zip">
+              Download ZIP
+            </a>
+          </div>
         </div>
-        <p class="disclosure">
-          Chrome does not allow this private helper to install itself automatically. Download the ZIP,
-          load it unpacked, and reload the extension after each helper update.
-        </p>
       </section>
 
       <section class="table-section helper-steps">
@@ -56,10 +66,44 @@
           <li>Turn on <code>Developer mode</code>.</li>
           <li>Click <code>Load unpacked</code>.</li>
           <li>Select the extracted helper folder.</li>
-          <li>Confirm Chrome shows helper version <code>0.2.5</code>.</li>
+          <li>Confirm Chrome shows helper version <code>0.2.6</code>.</li>
           <li>Return to the screener and refresh the page.</li>
         </ol>
       </section>
+
     </main>
+
+    <footer class="site-footer" aria-label="Footer navigation">
+      <div class="page-inner footer-inner">
+        <div class="footer-brand">
+          <p class="eyebrow">Wheel Strategy Screener</p>
+          <h2>End-of-week options workflow</h2>
+          <p>
+            Screen cash-secured puts, review covered calls, and keep Robinhood
+            credentials local to Chrome.
+          </p>
+        </div>
+        <nav class="footer-columns" aria-label="Footer links">
+          <div class="footer-column">
+            <h3>Product</h3>
+            <a href="/">Dashboard</a>
+            <a href="/guide.html">Setup Guide</a>
+            <a href="/helper.html">Install Helper</a>
+          </div>
+          <div class="footer-column">
+            <h3>Resources</h3>
+            <a href="/learn.html">Learn</a>
+            <a href="/faq.html">FAQ</a>
+            <a href="/calculator.html">Calculator</a>
+          </div>
+          <div class="footer-column">
+            <h3>Company</h3>
+            <a href="/contact.html">Contact Us</a>
+            <a href="/privacy.html">Privacy Policy</a>
+            <a href="/terms.html">Terms of Service</a>
+          </div>
+        </nav>
+      </div>
+    </footer>
   </body>
 </html>

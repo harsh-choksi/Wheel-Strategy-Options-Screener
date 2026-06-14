@@ -1,0 +1,192 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <meta
+      name="description"
+      content="Learn the wheel strategy workflow for cash-secured puts and covered calls in Wheel Strategy Screener."
+    />
+    <title>Learn - Wheel Strategy Screener</title>
+    <link rel="icon" href="/favicon.ico?v=0.2.6" sizes="any" />
+    <link rel="icon" href="/favicon-32.png?v=0.2.6" sizes="32x32" type="image/png" />
+    <link rel="icon" href="/favicon-16.png?v=0.2.6" sizes="16x16" type="image/png" />
+    <link rel="apple-touch-icon" href="/apple-touch-icon.png?v=0.2.6" />
+    <link rel="stylesheet" href="/styles.css" />
+  </head>
+  <body>
+    <main class="app-shell simple-page">
+      <header class="topbar page-topbar">
+        <div class="title-block">
+          <p class="eyebrow">Resources</p>
+          <h1>Learn the wheel strategy</h1>
+          <p class="page-intro">
+            A beginner-friendly overview of cash-secured puts, covered calls, assignment,
+            collateral, premium, and how this dashboard supports an end-of-week review.
+          </p>
+        </div>
+        <div class="topbar-actions">
+          <a class="secondary-button" href="/guide.html">Setup Guide</a>
+          <a class="secondary-button" href="/">Back to Screener</a>
+        </div>
+      </header>
+
+      <section class="guide-section">
+        <div class="guide-section-heading">
+          <p class="step-kicker">Overview</p>
+          <h2>What the wheel strategy is</h2>
+          <p>
+            The wheel strategy is an options-income workflow built around two actions:
+            selling cash-secured puts on stocks you would be willing to own, and selling
+            covered calls on shares you already own. A put can assign shares to you. A
+            covered call can call shares away from you. The premium is the income received
+            for taking that obligation, but the obligation and market risk remain real.
+          </p>
+        </div>
+        <div class="content-grid">
+          <article class="resource-card">
+            <h3>Cash-secured puts</h3>
+            <p>
+              A cash-secured put means you reserve enough cash to buy 100 shares if assigned.
+              The screener helps compare candidate symbols, analyst targets, put bids, strike
+              prices, return, and collateral use before you decide whether anything fits.
+            </p>
+          </article>
+          <article class="resource-card">
+            <h3>Covered calls</h3>
+            <p>
+              A covered call means you already own 100 shares per contract. The dashboard
+              lets you enter your average cost and contracts, then estimates selected call
+              premium and total assignment return using Robinhood's visible call quotes.
+              The covered-call cycle is the share-owning side of the wheel.
+            </p>
+          </article>
+          <article class="resource-card">
+            <h3>Assignment risk</h3>
+            <p>
+              Assignment is the core mechanic to understand before using either side of
+              the wheel. It can happen when an option holder exercises. For puts,
+              assignment means buying shares at the strike. For calls, assignment means
+              selling shares at the strike. This tool does not predict assignment or
+              place trades.
+            </p>
+          </article>
+        </div>
+      </section>
+
+      <section class="guide-section">
+        <div class="guide-section-heading">
+          <p class="step-kicker">How the site helps</p>
+          <h2>End-of-week workflow</h2>
+          <p>
+            The app is designed for a weekly review. You prepare your Robinhood screeners or
+            covered-call rows, scan the symbols, review the resulting option quotes, and export
+            the table if you want to compare it elsewhere.
+          </p>
+        </div>
+        <ol class="guide-steps">
+          <li><strong>CSP mode:</strong> use Manual to enter symbols, or Auto to scan a saved Robinhood screener, then set portfolio value and weekly return target.</li>
+          <li><strong>CC mode:</strong> use Manual to enter covered-call rows, or Auto to import positions from your account investing page.</li>
+          <li><strong>TradingView scan:</strong> the server reads current price and analyst targets where available.</li>
+          <li><strong>Robinhood quotes:</strong> the Chrome helper reads default-expiration Sell Put or Sell Call quotes from your open Robinhood tab.</li>
+          <li><strong>Calculated results:</strong> the server selects strikes, calculates return, sizes CSP contracts, and estimates CC premium and assignment return.</li>
+        </ol>
+        <div class="guide-callout">
+          Manual is the default for both strategies. Auto uses Robinhood-based import: saved screeners for CSP and stock positions for CC.
+          <strong>Scan</strong> is the first data collection for a strategy. After data exists,
+          the button becomes <strong>Refresh</strong> and rereads Robinhood, TradingView, and
+          option chains.
+        </div>
+      </section>
+
+      <section class="guide-section">
+        <div class="guide-section-heading">
+          <p class="step-kicker">Risk basics</p>
+          <h2>What to verify before using any result</h2>
+          <p>
+            Options involve risk and are not suitable for every investor. FINRA and OCC both
+            publish investor education about options, assignment, exercise, and standardized
+            options risk. Review official materials and your brokerage disclosures before
+            relying on any options workflow.
+          </p>
+        </div>
+        <div class="content-grid">
+          <article class="resource-card">
+            <h3>Capital and collateral</h3>
+            <p>
+              CSPs require enough cash for assignment. Covered calls require shares. Verify
+              buying power, settled cash, margin settings, and account restrictions in your
+              brokerage before placing any order.
+            </p>
+          </article>
+          <article class="resource-card">
+            <h3>Quotes and fills</h3>
+            <p>
+              Bid prices can change quickly. A displayed bid is not a guaranteed fill. Check
+              the live option chain, spread, liquidity, expiration, and order details before
+              trading.
+            </p>
+          </article>
+          <article class="resource-card">
+            <h3>Independent review</h3>
+            <p>
+              This app is a calculator and screener. It does not provide financial advice,
+              does not recommend trades, and does not place orders.
+            </p>
+          </article>
+        </div>
+        <p class="guide-footnote">
+          Helpful references: <a class="text-link" href="https://www.finra.org/investors/investing/investment-products/options">FINRA options overview</a>
+          and <a class="text-link" href="https://www.theocc.com/company-information/documents-and-archives/options-disclosure-document">OCC options disclosure document</a>.
+        </p>
+      </section>
+
+      <section class="guide-section">
+        <div class="guide-section-heading">
+          <p class="step-kicker">Privacy model</p>
+          <h2>What stays local</h2>
+          <p>
+            Your Robinhood login stays in Chrome. The helper reads visible symbols and
+            option-chain quote values from your browser. Robinhood passwords, MFA codes,
+            and cookies are not sent to this site.
+          </p>
+        </div>
+        <div class="guide-callout neutral">
+          Custom CSP screener names, manual CSP symbols, and manual covered-call rows are stored in your browser only.
+          Scan requests send symbols and quote values needed for calculation, but the server
+          does not save those settings as global website settings.
+        </div>
+      </section>
+
+      <footer class="site-footer" aria-label="Footer navigation">
+        <div class="footer-inner">
+          <div class="footer-brand">
+            <p class="eyebrow">Wheel Strategy Screener</p>
+            <h2>End-of-week options workflow</h2>
+            <p>Screen cash-secured puts, review covered calls, and keep Robinhood credentials local to Chrome.</p>
+          </div>
+          <nav class="footer-columns" aria-label="Footer links">
+            <div class="footer-column">
+              <h3>Product</h3>
+              <a href="/">Dashboard</a>
+              <a href="/guide.html">Setup Guide</a>
+              <a href="/helper.html">Install Helper</a>
+            </div>
+            <div class="footer-column">
+              <h3>Resources</h3>
+              <a href="/learn.html">Learn</a>
+              <a href="/faq.html">FAQ</a>
+              <a href="/calculator.html">Calculator</a>
+            </div>
+            <div class="footer-column">
+              <h3>Company</h3>
+              <a href="/contact.html">Contact Us</a>
+              <a href="/privacy.html">Privacy Policy</a>
+              <a href="/terms.html">Terms of Service</a>
+            </div>
+          </nav>
+        </div>
+      </footer>
+    </main>
+  </body>
+</html>

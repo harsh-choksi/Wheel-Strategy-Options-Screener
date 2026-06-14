@@ -5,24 +5,24 @@
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <meta
       name="description"
-      content="Setup guide for the Wheel Strategy Options Screener Chrome helper and Robinhood lists."
+      content="Setup guide for the Wheel Strategy Screener Chrome helper, Robinhood screeners, covered calls, and option chains."
     />
-    <title>Setup Guide - Wheel Strategy Options Screener</title>
-    <link rel="icon" href="/favicon.ico?v=0.2.5" sizes="any" />
-    <link rel="icon" href="/favicon-32.png?v=0.2.5" sizes="32x32" type="image/png" />
-    <link rel="icon" href="/favicon-16.png?v=0.2.5" sizes="16x16" type="image/png" />
-    <link rel="apple-touch-icon" href="/apple-touch-icon.png?v=0.2.5" />
+    <title>Setup Guide - Wheel Strategy Screener</title>
+    <link rel="icon" href="/favicon.ico?v=0.2.6" sizes="any" />
+    <link rel="icon" href="/favicon-32.png?v=0.2.6" sizes="32x32" type="image/png" />
+    <link rel="icon" href="/favicon-16.png?v=0.2.6" sizes="16x16" type="image/png" />
+    <link rel="apple-touch-icon" href="/apple-touch-icon.png?v=0.2.6" />
     <link rel="stylesheet" href="/styles.css" />
   </head>
   <body>
     <main class="app-shell guide-page">
       <header class="topbar">
-        <div>
+        <div class="title-block">
           <p class="eyebrow">Setup Guide</p>
-          <h1>Set up your screener</h1>
+          <h1>Set up Wheel Strategy Screener</h1>
           <p class="guide-intro">
-            Create the Robinhood lists once, install the local Chrome helper, and your dashboard
-            can scan them whenever you need a fresh read.
+            Save your Robinhood screener names, install the local Chrome helper, and use the
+            dashboard for cash-secured puts or covered calls whenever you need a scan or fresh read.
           </p>
         </div>
         <a class="secondary-button" href="/">Back to Screener</a>
@@ -33,70 +33,110 @@
           <p class="step-kicker">Overview</p>
           <h2 id="how-it-works">How it works</h2>
           <p>
-            Your Robinhood login stays in Chrome. The helper reads ticker symbols from the selected
-            Robinhood screener, then reads full default-expiration Sell Put quote chains only for
-            stocks that pass the TradingView forecast check.
+            Your Robinhood login stays in Chrome. The site never asks for your Robinhood username,
+            password, MFA code, cookies, or account session. The helper reads visible symbols and
+            option quotes from your own browser, while the server fetches TradingView data and
+            calculates the table.
           </p>
         </div>
-        <div class="flow-diagram" aria-label="Robinhood list to exportable table workflow">
-          <div class="flow-node"><span>1</span><strong>Robinhood list</strong></div>
+        <div class="flow-diagram" aria-label="Robinhood and TradingView workflow">
+          <div class="flow-node"><span>1</span><strong>Symbols or CC rows</strong></div>
           <div class="flow-arrow" aria-hidden="true">&rarr;</div>
-          <div class="flow-node"><span>2</span><strong>Local Chrome helper</strong></div>
+          <div class="flow-node"><span>2</span><strong>TradingView scan</strong></div>
           <div class="flow-arrow" aria-hidden="true">&rarr;</div>
-          <div class="flow-node"><span>3</span><strong>TradingView scan</strong></div>
+          <div class="flow-node"><span>3</span><strong>Robinhood option quotes</strong></div>
           <div class="flow-arrow" aria-hidden="true">&rarr;</div>
-          <div class="flow-node"><span>4</span><strong>CSP quotes and sizing</strong></div>
+          <div class="flow-node"><span>4</span><strong>Calculated results</strong></div>
         </div>
         <div class="guide-callout">
-          Passwords and MFA codes are never sent to this site. The helper sends ticker symbols and
-          visible option quote values only.
+          <strong>CSP mode</strong> starts from whichever saved Robinhood screener you select.
+          <strong>CC mode</strong> starts from covered-call rows you type or positions imported from Robinhood. Both modes use Robinhood's
+          default selected option expiration.
         </div>
       </section>
 
-      <section class="guide-section" aria-labelledby="create-screeners">
+      <section class="guide-section" aria-labelledby="shared-setup">
         <div class="guide-section-heading">
-          <p class="step-kicker">Step 1</p>
-          <h2 id="create-screeners">Create your Robinhood screeners</h2>
+          <p class="step-kicker">Shared Setup</p>
+          <h2 id="shared-setup">Set up the helper and return target</h2>
           <p>
-            In Robinhood on the web, go to Home and scroll to <strong>Lists</strong>. Select
-            <strong>Create watchlist or screener</strong>, choose the stock screener option, add
-            filters with <strong>+</strong>, review Preview, and select Create.
+            These steps apply to both cash-secured puts and covered calls. Use desktop Chrome,
+            keep Robinhood open during scans, and use the Weekly or Yearly return inputs to choose
+            the minimum option premium target.
           </p>
         </div>
 
         <ol class="guide-steps">
-          <li>Log in directly at <a class="text-link" href="https://robinhood.com/" target="_blank" rel="noreferrer">robinhood.com</a>.</li>
-          <li>From Home, scroll to <strong>Lists</strong> and select <strong>Create watchlist or screener</strong>.</li>
-          <li>Choose the stock screener option and enter one of the exact names below.</li>
-          <li>Add the filters that fit your strategy and risk tolerance, review Preview, and select Create.</li>
-          <li>Repeat until all three screeners exist.</li>
+          <li>Open the <a class="text-link" href="/helper.html">helper download page</a> and download the ZIP.</li>
+          <li>Extract the ZIP into a folder you can keep.</li>
+          <li>Open <code>chrome://extensions</code>, turn on <strong>Developer mode</strong>, click <strong>Load unpacked</strong>, and select the extracted folder.</li>
+          <li>Confirm Chrome shows helper version <code>0.2.6</code>, then reload the screener dashboard page.</li>
+          <li>Click <strong>Open Robinhood</strong>, log in directly at <a class="text-link" href="https://robinhood.com/" target="_blank" rel="noreferrer">robinhood.com</a> in Chrome, and keep that tab open during scans.</li>
+          <li>Select <strong>Mock</strong> to test the dashboard without Robinhood, or select <strong>Robinhood</strong> for a real scan.</li>
         </ol>
 
-        <div class="name-list" aria-label="Required Robinhood screener names">
+        <div class="guide-callout neutral">
+          Each strategy keeps its own return target. CSP mode defaults to <strong>1% weekly</strong>,
+          shown as about <strong>67.77% yearly</strong> using 52-week compounding:
+          <code>(1 + weekly)^52 - 1</code>. CC mode defaults to <strong>2% weekly</strong>, shown
+          as <strong>104% yearly</strong> using simple annualization: <code>weekly * 52</code>.
+          The weekly value is the rule used for option selection.
+        </div>
+        <div class="guide-callout">
+          The main action button says <strong>Scan</strong> before a strategy has data. After a
+          successful CSP or CC scan, that strategy's button changes to <strong>Refresh</strong>.
+          Scan and Refresh both collect fresh Robinhood, TradingView, and option-chain data; portfolio,
+          cost, contract, or return-target edits reuse cached scan data when available.
+        </div>
+        <a class="primary-button inline-action" href="/helper.html">Install Helper</a>
+      </section>
+
+      <section class="guide-section" aria-labelledby="create-screeners">
+        <div class="guide-section-heading">
+          <p class="step-kicker">CSP Setup</p>
+          <h2 id="create-screeners">Create and save your Robinhood screeners</h2>
+          <p>
+            Cash-secured put mode reads symbols from a Robinhood stock screener you select. In Robinhood
+            on the web, go to Home and scroll to <strong>Lists</strong>. Select
+            <strong>Create watchlist or screener</strong>, choose the stock screener option, add
+            filters with <strong>+</strong>, review Preview, and select Create. Then save that exact
+            screener name in the dashboard with <strong>Screener &rarr; Manage</strong>.
+          </p>
+        </div>
+
+        <ol class="guide-steps">
+          <li>From Robinhood Home, scroll to <strong>Lists</strong> and select <strong>Create watchlist or screener</strong>.</li>
+          <li>Choose the stock screener option and enter any name you want to use.</li>
+          <li>Add filters that fit your own strategy and risk tolerance, review Preview, and select Create.</li>
+          <li>Return to the dashboard, click <strong>Manage</strong> beside the Screener dropdown, and add or rename saved screeners so they match Robinhood exactly.</li>
+          <li>Select the saved screener from the dropdown before scanning CSPs.</li>
+        </ol>
+
+        <div class="name-list" aria-label="Starter Robinhood screener name examples">
           <div class="name-row">
             <div>
-              <span>Safe tab</span>
-              <code>Wheel Strategy Screener Safe</code>
+              <span>Starter example</span>
+              <code>Wheel Strategy 1</code>
             </div>
-            <button class="copy-button" type="button" data-copy="Wheel Strategy Screener Safe">
+            <button class="copy-button" type="button" data-copy="Wheel Strategy 1">
               Copy
             </button>
           </div>
           <div class="name-row">
             <div>
-              <span>Standard tab</span>
-              <code>Wheel Strategy Screener</code>
+              <span>Starter example</span>
+              <code>Wheel Strategy 2</code>
             </div>
-            <button class="copy-button" type="button" data-copy="Wheel Strategy Screener">
+            <button class="copy-button" type="button" data-copy="Wheel Strategy 2">
               Copy
             </button>
           </div>
           <div class="name-row">
             <div>
-              <span>Mini tab</span>
-              <code>Wheel Strategy Screener Mini</code>
+              <span>Starter example</span>
+              <code>Wheel Strategy 3</code>
             </div>
-            <button class="copy-button" type="button" data-copy="Wheel Strategy Screener Mini">
+            <button class="copy-button" type="button" data-copy="Wheel Strategy 3">
               Copy
             </button>
           </div>
@@ -104,8 +144,10 @@
         <p class="copy-status" id="copyStatus" aria-live="polite"></p>
 
         <p class="guide-footnote">
-          Names must match exactly. The dashboard maps Safe, Standard, and Mini to these Robinhood
-          lists. This guide does not recommend investment filters.
+          These three names are starter examples only. You can add, rename, delete, and select saved
+          screeners locally in your browser. They are not saved globally on the website. The selected saved name must match the Robinhood
+          screener exactly because the Chrome helper clicks that visible list by name.
+          This guide does not recommend investment filters.
         </p>
         <p class="guide-footnote">
           Robinhood references:
@@ -115,76 +157,192 @@
         </p>
       </section>
 
-      <section class="guide-section" aria-labelledby="install-helper">
+      <section class="guide-section" aria-labelledby="cash-secured-puts">
         <div class="guide-section-heading">
-          <p class="step-kicker">Step 2</p>
-          <h2 id="install-helper">Install the Chrome helper</h2>
+          <p class="step-kicker">Strategy</p>
+          <h2 id="cash-secured-puts">Cash-Secured Puts</h2>
           <p>
-            The private-beta helper runs locally in desktop Chrome. It reads list symbols and
-            default-expiration Sell Put quote chains from your logged-in Robinhood tab.
+            CSP mode scans either the selected saved Robinhood screener or a manual symbol list,
+            checks TradingView forecast data, then reads Robinhood Sell Put quotes for stocks
+            that pass the forecast screen.
           </p>
         </div>
-        <ol class="guide-steps">
-          <li>Open the <a class="text-link" href="/helper.html">helper download page</a> and download the ZIP.</li>
-          <li>Extract the ZIP into a folder you can keep.</li>
-          <li>Open <code>chrome://extensions</code> in Chrome.</li>
-          <li>Turn on <strong>Developer mode</strong>, click <strong>Load unpacked</strong>, and select the extracted folder.</li>
-          <li>Confirm Chrome shows helper version <code>0.2.5</code>, then refresh the screener dashboard.</li>
-        </ol>
-        <a class="primary-button inline-action" href="/helper.html">Install Helper</a>
-      </section>
 
-      <section class="guide-section" aria-labelledby="run-scan">
-        <div class="guide-section-heading">
-          <p class="step-kicker">Step 3</p>
-          <h2 id="run-scan">Run your first scan</h2>
-        </div>
         <ol class="guide-steps">
-          <li>On the dashboard, click <strong>Open Robinhood</strong> and log in directly on Robinhood.</li>
-          <li>Keep the Robinhood tab open and return to the dashboard. The helper reuses that tab while it opens screeners and checks option chains.</li>
-          <li>Select <strong>Robinhood</strong> as the source.</li>
-          <li>Select <strong>Safe</strong>, <strong>Standard</strong>, or <strong>Mini</strong>.</li>
-          <li>Enter your portfolio value and Weekly or Yearly return target, then click <strong>Refresh</strong>.</li>
+          <li>Select <strong>CSP</strong> at the top of the dashboard.</li>
+          <li>Enter your portfolio value. This is the cash limit used for contract sizing.</li>
+          <li>Use the table toolbar's <strong>Manual</strong> mode to type symbols directly, or switch to <strong>Auto</strong> and select a saved Robinhood screener.</li>
+          <li>In Manual mode, use <strong>Add Entry</strong> for more rows and the red <code>&times;</code> to remove a row. Blank rows are ignored.</li>
+          <li>Set Weekly or Yearly return target. CSP defaults to 1% weekly, compounded over 52 weeks for the Yearly display.</li>
+          <li>Click <strong>Scan</strong> the first time. After results exist, click <strong>Refresh</strong> whenever you want a fresh Robinhood, TradingView, and Sell Put read.</li>
         </ol>
+
         <div class="guide-callout neutral">
-          Mock mode works without Robinhood. Use it to explore the dashboard before connecting your lists.
+          CSP eligibility starts with TradingView: the minimum analyst target must be above the
+          TradingView current price. If TradingView exposes current price but no analyst target,
+          the row remains visible as Unavailable and is not allocated. If the target check passes, the server chooses the lowest Robinhood
+          default-expiration Sell Put strike strictly below current price where
+          <code>bid / strike >= Weekly %</code>.
         </div>
-      </section>
 
-      <section class="guide-section" aria-labelledby="understand-results">
-        <div class="guide-section-heading">
-          <p class="step-kicker">Reference</p>
-          <h2 id="understand-results">Understand the results</h2>
-          <p>
-            A stock first has to pass TradingView: its minimum analyst target must be above its
-            TradingView current price. Then the helper reads the full visible and scrollable
-            Robinhood Sell Put chain for the default expiration. The server chooses the lowest
-            strike below current price where <code>bid / strike</code> meets the selected weekly return target.
-            The default is 2% weekly, which compounds to about 180.03% yearly over 52 weeks.
-          </p>
-        </div>
         <dl class="glossary-grid">
-          <div><dt>Rank</dt><dd>Order used for allocation sizing.</dd></div>
-          <div><dt>Symbol</dt><dd>Ticker extracted from the selected Robinhood list.</dd></div>
-          <div><dt>Status</dt><dd>Eligible, SKIP, below minimum target, unused, or unavailable.</dd></div>
+          <div><dt>Rank</dt><dd>Order after eligible rows are sorted for allocation sizing.</dd></div>
+          <div><dt>Symbol</dt><dd>Ticker extracted from the selected Robinhood list or typed manually.</dd></div>
+          <div><dt>Status</dt><dd>Eligible, SKIP, Below min, Unused, or Unavailable.</dd></div>
           <div><dt>Current</dt><dd>Current price read from TradingView.</dd></div>
           <div><dt>Min Target</dt><dd>Lowest TradingView analyst forecast.</dd></div>
           <div><dt>Avg Target</dt><dd>Average TradingView analyst forecast.</dd></div>
           <div><dt>Max Target</dt><dd>Highest TradingView analyst forecast.</dd></div>
-          <div><dt>Allocation</dt><dd>Target share of the portfolio.</dd></div>
-          <div><dt>Target $</dt><dd>Portfolio dollars targeted for the stock.</dd></div>
-          <div><dt>Contracts</dt><dd>Whole CSP contracts sized within your portfolio.</dd></div>
-          <div><dt>Actual Used</dt><dd>Collateral required by the sized contracts.</dd></div>
-          <div><dt>CSP Strike</dt><dd>Lowest Robinhood Sell Put strike below current price that meets the selected weekly return.</dd></div>
-          <div><dt>Bid</dt><dd>Robinhood bid price for the selected put strike.</dd></div>
-          <div><dt>Return %</dt><dd>Bid divided by strike, displayed as a percent.</dd></div>
+          <div><dt>Allocation</dt><dd>Target share of portfolio cash assigned to that row.</dd></div>
+          <div><dt>Target</dt><dd>Target portfolio dollars for that row.</dd></div>
+          <div><dt>Strike</dt><dd>Selected Sell Put strike from Robinhood.</dd></div>
+          <div><dt>Bid</dt><dd>Visible Robinhood bid for the selected put; not a guaranteed fill.</dd></div>
+          <div><dt>Return</dt><dd>Bid divided by strike.</dd></div>
+          <div><dt>Contracts</dt><dd>Whole put contracts sized within your portfolio value.</dd></div>
+          <div><dt>Used</dt><dd>Cash collateral required by the sized contracts.</dd></div>
+          <div><dt>Below min</dt><dd>TradingView minimum target is not above current price.</dd></div>
           <div><dt>SKIP</dt><dd>TradingView passed, but no below-current put met the selected return rule.</dd></div>
+          <div><dt>Unused</dt><dd>The row qualified, but contract sizing gave it zero contracts.</dd></div>
+          <div><dt>Unavailable</dt><dd>TradingView data or Robinhood put quotes could not be read.</dd></div>
         </dl>
         <div class="guide-callout neutral">
-          Changing portfolio value reallocates the existing scan automatically. Changing Weekly or
-          Yearly return reuses the latest TradingView rows and cached Robinhood option quotes.
-          Click Refresh only when you want new Robinhood symbols, fresh TradingView data, and fresh
-          Robinhood put quotes.
+          After a CSP scan, changing portfolio value reallocates immediately without re-reading
+          Robinhood or TradingView. Changing Weekly or Yearly return reuses cached put quotes and
+          reselects strikes. Click Refresh after a scan for new Robinhood symbols, fresh TradingView data, and
+          fresh Sell Put quotes.
+        </div>
+        <div class="guide-callout neutral">
+          In Auto mode, the <strong>Hide unavailable and ineligible rows</strong> checkbox appears
+          under the Manual/Auto switch. It is off by default, so all rows stay visible unless you
+          choose to hide them. CSP SKIP rows stay visible because they passed TradingView but did
+          not meet the option-return rule.
+        </div>
+        <div class="guide-callout neutral">
+          Custom CSP screeners and manual CSP symbols are saved in this browser only, not globally on the website. If you use a different computer or
+          want to move settings, use <strong>Settings &rarr; Export Settings</strong> and
+          <strong>Import Settings</strong>.
+        </div>
+      </section>
+
+      <section class="guide-section" aria-labelledby="covered-calls">
+        <div class="guide-section-heading">
+          <p class="step-kicker">Strategy</p>
+          <h2 id="covered-calls">Covered Calls</h2>
+          <p>
+            CC mode is for stock positions you already own. You can enter position rows manually
+            or import stock positions from Robinhood, then the helper reads Robinhood Sell Call
+            quotes for usable symbols.
+          </p>
+        </div>
+
+        <ol class="guide-steps">
+          <li>Select <strong>CC</strong> at the top of the dashboard.</li>
+          <li>Use the table toolbar's <strong>Manual</strong> mode to enter rows directly: <strong>Symbol</strong>, <strong>Average Cost</strong> per share, and <strong>Contracts</strong>.</li>
+          <li>Switch to <strong>Auto</strong> to import visible stock positions from <code>robinhood.com/account/investing</code>.</li>
+          <li>Use <strong>Add Entry</strong> at the bottom of the list for more rows.</li>
+          <li>Use the red <code>&times;</code> beside a symbol to remove that row. At least one blank row remains.</li>
+          <li>Set Weekly or Yearly return target. CC defaults to 2% weekly, and Yearly is calculated as Weekly times 52.</li>
+          <li>Click <strong>Scan</strong> the first time. After results exist, click <strong>Refresh</strong> whenever you want fresh TradingView data and Robinhood Sell Call quotes.</li>
+        </ol>
+
+        <div class="guide-callout">
+          Symbol edits require Scan when the CC list has no data yet, or Refresh after a scan,
+          because they need new TradingView data and a new Robinhood option-chain snapshot.
+          Average Cost, Contracts, Weekly %, and Yearly % changes reuse cached TradingView rows
+          and cached Sell Call quotes when available.
+        </div>
+
+        <div class="guide-callout neutral">
+          Manual CC entries are saved locally in this browser, so refreshing the page keeps your
+          Symbol, Average Cost, and Contracts rows. The site does not save scanned TradingView data,
+          Robinhood option quotes, helper status, or CSV output. Clearing site data resets the CC
+          list back to one blank row.
+        </div>
+
+        <div class="guide-callout neutral">
+          Auto imports <strong>symbol</strong>, <strong>shares</strong>, and
+          <strong>average cost</strong> for every account the helper can select from the account
+          dropdown. Contract count is <code>floor(shares / 100)</code>. Rows below 100 shares
+          remain visible with 0 contracts, but they are not used for Sell Call option-chain reads.
+        </div>
+
+        <div class="guide-callout neutral">
+          You can enter multiple covered-call rows for the same ticker when you have separate lots
+          with different average costs or contract counts. During each Scan or Refresh, the helper
+          reads that ticker's Robinhood Sell Call chain once, and the server reuses the same raw call
+          quotes for each matching row.
+        </div>
+
+        <div class="guide-callout neutral">
+          In Auto mode, <strong>Hide unavailable and ineligible rows</strong> appears under the
+          Manual/Auto switch. It starts unchecked so imported rows remain visible, including rows
+          under 100 shares with zero usable covered-call contracts.
+        </div>
+
+        <div class="guide-callout neutral">
+          Covered-call return uses <code>max(current price, average cost)</code> as the baseline.
+          The primary rule chooses the highest call strike above that baseline where
+          <code>bid / baseline >= Weekly %</code>. If no call meets the target, the fallback chooses
+          the closest positive-bid strike above average cost. If no above-cost strike has a positive
+          bid, it steps below average cost and chooses the highest positive-bid strike available.
+          A below-cost fallback can reduce assignment return and is only used when no positive-bid
+          above-cost call exists.
+        </div>
+
+        <dl class="glossary-grid">
+          <div><dt>Symbol</dt><dd>Ticker entered by you in the Covered Calls list.</dd></div>
+          <div><dt>Status</dt><dd>Eligible, SKIP, or Unavailable. Hover rows for warnings when TradingView has only current price data or average cost is used as the return baseline.</dd></div>
+          <div><dt>Average Cost</dt><dd>Your per-share cost basis for the covered position.</dd></div>
+          <div><dt>Current</dt><dd>Current price read from TradingView. If analyst targets are missing, CC mode can still use current-only data.</dd></div>
+          <div><dt>Min Target</dt><dd>Lowest TradingView analyst forecast, blank when only current price is available.</dd></div>
+          <div><dt>Avg Target</dt><dd>Average TradingView analyst forecast, blank when only current price is available.</dd></div>
+          <div><dt>Max Target</dt><dd>Highest TradingView analyst forecast, blank when only current price is available.</dd></div>
+          <div><dt>Strike</dt><dd>Selected Robinhood Sell Call strike for the default expiration.</dd></div>
+          <div><dt>Bid</dt><dd>Visible Robinhood bid for the selected call; not a guaranteed fill.</dd></div>
+          <div><dt>Return</dt><dd>Bid divided by the larger of current price and average cost.</dd></div>
+          <div><dt>Contracts</dt><dd>Contract count entered by you or calculated from imported Robinhood shares.</dd></div>
+          <div><dt>Total Return</dt><dd>Assignment gain plus premium: <code>((strike - averageCost) + bid) * 100 * contracts</code>.</dd></div>
+          <div><dt>Total Return %</dt><dd>Total return divided by <code>averageCost * 100 * contracts</code>.</dd></div>
+          <div><dt>SKIP</dt><dd>No positive-bid call quote was available.</dd></div>
+          <div><dt>Unavailable</dt><dd>TradingView data or Robinhood call quotes could not be read.</dd></div>
+        </dl>
+
+        <div class="guide-callout neutral">
+          The CC summary cards are separate from CSP mode. <strong>Positions</strong> counts
+          nonblank symbol rows. <strong>Weekly Return</strong> is premium only:
+          <code>sum(bid * 100 * contracts)</code>, shown against
+          <code>sum(returnBase * 100 * contracts)</code>. <strong>Total Return</strong> includes
+          assignment gain plus premium, shown against average-cost basis.
+        </div>
+
+        <p class="guide-footnote">
+          Total Return assumes assignment at the selected strike and includes the option premium.
+          It is an estimate for comparison, not a trade instruction or guaranteed outcome.
+        </p>
+      </section>
+
+      <section class="guide-section" aria-labelledby="settings-presets">
+        <div class="guide-section-heading">
+          <p class="step-kicker">Settings</p>
+          <h2 id="settings-presets">Export and import settings</h2>
+          <p>
+            The Settings button lets you save or move strategy setup without carrying over private
+            row data or stale market results.
+          </p>
+        </div>
+        <dl class="glossary-grid">
+          <div><dt>Exported</dt><dd>Saved CSP screener names, selected CSP screener, portfolio value, CSP return target, CC return target, active strategy, data source, and CSP/CC strategy source modes as manual or auto.</dd></div>
+          <div><dt>Not exported</dt><dd>Manual CSP rows, covered-call rows, imported Robinhood positions, TradingView scan results, Robinhood option quotes, helper status, and CSV output.</dd></div>
+          <div><dt>Import behavior</dt><dd>Import replaces strategy settings, keeps current covered-call rows, clears scanned results, and returns the dashboard to Scan.</dd></div>
+        </dl>
+        <div class="guide-callout neutral">
+          Use exported settings when you want the same CSP screener names and return targets on
+          another browser. Covered-call positions are intentionally not included because those are
+          personal row entries stored locally on each browser.
+        </div>
+        <div class="guide-callout neutral">
+          Older settings files that use the previous CSP or CC source names are still accepted:
+          screener and robinhood-style values import as Auto, while manual values import as Manual.
         </div>
       </section>
 
@@ -196,27 +354,27 @@
         <dl class="troubleshooting-list">
           <div>
             <dt>Helper not detected</dt>
-            <dd>Reload or reinstall the extension, then refresh the dashboard.</dd>
+            <dd>Reload or reinstall the extension, then reload the dashboard page.</dd>
           </div>
           <div>
             <dt>Slow extraction</dt>
-            <dd>The helper must open Robinhood lists and option chains in Chrome. Short lists are faster; larger lists take longer because every TradingView-eligible symbol needs an option-chain read.</dd>
+            <dd>The helper must open Robinhood lists, account positions, and option chains in Chrome. Short CSP lists and fewer unique CC tickers are faster because each unique eligible symbol needs an option-chain read. Duplicate covered-call lots share the same raw quote read during a Scan or Refresh.</dd>
           </div>
           <div>
             <dt>Missing symbols</dt>
-            <dd>Keep Robinhood open, confirm you are logged in, and verify the exact screener names.</dd>
+            <dd>Keep Robinhood open, confirm you are logged in, and verify the selected saved screener name matches the Robinhood screener exactly. Manual CSP symbols skip screener-name matching.</dd>
           </div>
           <div>
             <dt>Missing option quotes</dt>
-            <dd>Keep the Robinhood tab open and avoid interacting with it during a scan. If a symbol still looks wrong, click Refresh to collect a fresh option-chain snapshot.</dd>
+            <dd>Keep the Robinhood tab open and avoid interacting with it during a scan. If a symbol still looks wrong, click Scan for a first run or Refresh after results exist to collect a fresh option-chain snapshot.</dd>
           </div>
           <div>
             <dt>Unavailable TradingView row</dt>
-            <dd>Retry later or confirm TradingView exposes a forecast page for that symbol.</dd>
+            <dd>Retry later or confirm TradingView exposes a forecast page for that symbol. CC mode can sometimes continue with current-only TradingView data; CSP mode requires the min-target eligibility check.</dd>
           </div>
           <div>
             <dt>SKIP status</dt>
-            <dd>TradingView passed, but no default-expiration below-current Robinhood put bid reached the selected bid/strike return rule.</dd>
+            <dd>For CSPs, TradingView passed but no default-expiration below-current put bid reached the selected rule. For CCs, no positive-bid call strike was above average cost.</dd>
           </div>
           <div>
             <dt>Helper update</dt>
@@ -236,6 +394,39 @@
           </p>
         </div>
       </section>
+
+      <footer class="site-footer" aria-label="Footer navigation">
+        <div class="page-inner footer-inner">
+          <div class="footer-brand">
+            <p class="eyebrow">Wheel Strategy Screener</p>
+            <h2>End-of-week options workflow</h2>
+            <p>
+              Screen cash-secured puts, review covered calls, and keep Robinhood
+              credentials local to Chrome.
+            </p>
+          </div>
+          <nav class="footer-columns" aria-label="Footer links">
+            <div class="footer-column">
+              <h3>Product</h3>
+              <a href="/">Dashboard</a>
+              <a href="/guide.html">Setup Guide</a>
+              <a href="/helper.html">Install Helper</a>
+            </div>
+            <div class="footer-column">
+              <h3>Resources</h3>
+              <a href="/learn.html">Learn</a>
+              <a href="/faq.html">FAQ</a>
+              <a href="/calculator.html">Calculator</a>
+            </div>
+            <div class="footer-column">
+              <h3>Company</h3>
+              <a href="/contact.html">Contact Us</a>
+              <a href="/privacy.html">Privacy Policy</a>
+              <a href="/terms.html">Terms of Service</a>
+            </div>
+          </nav>
+        </div>
+      </footer>
     </main>
 
     <script src="/guide.js"></script>
