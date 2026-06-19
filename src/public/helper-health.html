@@ -3,75 +3,70 @@
   <head>
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
-    <title>Install Helper - Wheel Strategy Screener</title>
+    <title>Helper Health - Wheel Strategy Screener</title>
     <link rel="icon" href="/favicon.ico?v=0.2.8" sizes="any" />
     <link rel="icon" href="/favicon-32.png?v=0.2.8" sizes="32x32" type="image/png" />
     <link rel="icon" href="/favicon-16.png?v=0.2.8" sizes="16x16" type="image/png" />
     <link rel="apple-touch-icon" href="/apple-touch-icon.png?v=0.2.8" />
     <link rel="stylesheet" href="/styles.css" />
+    <script defer src="/helper-health.js"></script>
   </head>
   <body class="simple-shell">
     <header class="page-hero-band">
       <div class="page-inner page-hero-inner">
         <div class="title-block">
-          <p class="eyebrow">Chrome Helper</p>
-          <h1>Install Robinhood Helper</h1>
+          <p class="eyebrow">Helper Health</p>
+          <h1>Check the Chrome helper</h1>
           <p class="page-intro">
-            Load the local Chrome helper so the screener can read Robinhood screeners
-            and option-chain quotes from your own browser.
+            Verify the helper bridge, version, Robinhood tab, and app server before running
+            Robinhood scans.
           </p>
         </div>
         <div class="topbar-actions">
-          <a class="secondary-button" href="/guide.html">Setup Guide</a>
-          <a class="secondary-button" href="/helper-health.html">Helper Health</a>
-          <a class="secondary-button" href="/dashboard.html">Back to Dashboard</a>
+          <a class="secondary-button" href="/helper.html">Install Helper</a>
+          <a class="secondary-button" href="/dashboard.html">Dashboard</a>
         </div>
       </div>
     </header>
 
-    <main class="app-shell helper-page">
-      <section class="connection-band">
-        <div class="helper-hero">
-          <div class="helper-hero-copy">
-            <h2>Private beta install</h2>
-            <p>
-              The helper runs in your Chrome browser, reads ticker symbols from your
-              Robinhood screeners, reads option-chain quote values, and sends only the
-              values needed for screener calculations. Current helper version:
-              <strong>0.2.8</strong>.
-            </p>
-            <p>
-              Chrome does not allow this private helper to install itself automatically.
-              Download the ZIP, load it unpacked, and reload the extension after each
-              helper update.
-            </p>
-          </div>
-          <div class="helper-hero-action">
-            <a class="primary-button" href="/downloads/wheel-screener-helper.zip">
-              Download ZIP
-            </a>
-          </div>
-        </div>
-      </section>
-
-      <section class="table-section helper-steps">
+    <main class="app-shell helper-health-page">
+      <section class="table-section health-summary" aria-labelledby="helper-health-title">
         <div class="table-header">
           <div>
-            <h2>Install Steps</h2>
-            <p>Use this same flow whenever you update the helper.</p>
+            <h2 id="helper-health-title">Status checks</h2>
+            <p id="healthSummary">Checking helper and server status...</p>
           </div>
+          <button id="rerunHealthButton" class="secondary-button" type="button">Run Again</button>
         </div>
-        <ol>
-          <li>Download the ZIP and extract it to a folder you can keep.</li>
-          <li>Open <code>chrome://extensions</code>.</li>
-          <li>Turn on <code>Developer mode</code>.</li>
-          <li>Click <code>Load unpacked</code>.</li>
-          <li>Select the extracted helper folder.</li>
-          <li>Confirm Chrome shows helper version <code>0.2.8</code>.</li>
-          <li>Return to the screener and refresh the page.</li>
-        </ol>
+        <div class="health-grid" id="healthGrid" aria-live="polite">
+          <article class="health-card pending">
+            <span class="status-dot" aria-hidden="true"></span>
+            <h3>Extension bridge</h3>
+            <p>Waiting for helper response.</p>
+          </article>
+          <article class="health-card pending">
+            <span class="status-dot" aria-hidden="true"></span>
+            <h3>App server</h3>
+            <p>Checking public health endpoint.</p>
+          </article>
+        </div>
       </section>
 
+      <section class="guide-section" aria-labelledby="health-next-steps">
+        <div class="guide-section-heading">
+          <p class="step-kicker">Troubleshooting</p>
+          <h2 id="health-next-steps">If a check fails</h2>
+          <p>
+            Reload the helper at <code>chrome://extensions</code>, refresh this page, and keep
+            Robinhood open in Chrome. CC Auto must be able to use
+            <code>https://robinhood.com/account/investing</code>.
+          </p>
+        </div>
+        <div class="guide-callout">
+          Helper Health does not read Robinhood positions or option quotes. It only asks the
+          extension for status, the helper version, and the current Robinhood tab route.
+        </div>
+      </section>
     </main>
 
     <footer class="site-footer" aria-label="Footer navigation">

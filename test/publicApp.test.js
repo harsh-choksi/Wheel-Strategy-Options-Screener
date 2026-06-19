@@ -115,7 +115,7 @@ test("serves setup guide and guide copy script", async () => {
 });
 
 test("dashboard and helper page link to setup guide", () => {
-  const index = fs.readFileSync(path.resolve(__dirname, "../src/public/index.html"), "utf8");
+  const index = fs.readFileSync(path.resolve(__dirname, "../src/public/dashboard.html"), "utf8");
   const helper = fs.readFileSync(path.resolve(__dirname, "../src/public/helper.html"), "utf8");
   const guide = fs.readFileSync(path.resolve(__dirname, "../src/public/guide.html"), "utf8");
 
@@ -125,12 +125,49 @@ test("dashboard and helper page link to setup guide", () => {
   assert.match(guide, /class="title-block"/);
 });
 
+test("command center routes first-time and returning users to dashboard strategies", () => {
+  const root = fs.readFileSync(path.resolve(__dirname, "../src/public/index.html"), "utf8");
+  const home = fs.readFileSync(path.resolve(__dirname, "../src/public/home.html"), "utf8");
+  const dashboard = fs.readFileSync(path.resolve(__dirname, "../src/public/dashboard.html"), "utf8");
+  const appSource = fs.readFileSync(path.resolve(__dirname, "../src/public/app.js"), "utf8");
+  const css = fs.readFileSync(path.resolve(__dirname, "../src/public/styles.css"), "utf8");
+
+  assert.match(root, /class="home-body"/);
+  assert.match(root, /class="command-logo"/);
+  assert.match(root, /id="homeTitle" class="command-title">Wheel Strategy Screener<\/h1>/);
+  assert.match(root, /CSP Dashboard/);
+  assert.match(root, /CC Dashboard/);
+  assert.doesNotMatch(root, /class="site-footer"/);
+  assert.doesNotMatch(home, /class="site-footer"/);
+  assert.doesNotMatch(root, /command-copy/);
+  assert.match(root, /href="\/dashboard\.html\?strategy=csp"/);
+  assert.match(root, /href="\/dashboard\.html\?strategy=cc"/);
+  assert.match(root, /wheel-screener-last-strategy-v1/);
+  assert.match(root, /window\.location\.replace\(`\/dashboard\.html\?strategy=\$\{lastStrategy\}`\)/);
+  assert.match(root, /params\.get\("home"\) === "1"/);
+  assert.doesNotMatch(home, /window\.location\.replace/);
+  assert.match(dashboard, /href="\/home\.html">Home<\/a>/);
+  assert.match(appSource, /const LAST_STRATEGY_KEY = "wheel-screener-last-strategy-v1"/);
+  assert.match(appSource, /function applyInitialStrategyFromUrl/);
+  assert.match(appSource, /params\.get\("strategy"\)/);
+  assert.match(appSource, /rememberLastStrategy\(state\.strategy\)/);
+  assert.match(css, /\.command-center/);
+  assert.match(css, /\.command-center\s*\{[\s\S]*?text-align:\s*center/);
+  assert.match(css, /\.command-title\s*\{[\s\S]*?white-space:\s*nowrap/);
+  assert.match(css, /\.command-actions/);
+  assert.match(css, /\.command-card\s*\{[\s\S]*?border-radius:\s*999px/);
+  assert.match(css, /\.command-card\s*\{[\s\S]*?min-height:\s*48px/);
+  assert.match(css, /@media \(max-width: 820px\)[\s\S]*?\.command-actions/);
+});
+
 test("public pages include real footer navigation routes", () => {
   const publicDir = path.resolve(__dirname, "../src/public");
   const pageFiles = [
-    "index.html",
+    "dashboard.html",
     "guide.html",
     "helper.html",
+    "helper-health.html",
+    "changelog.html",
     "learn.html",
     "faq.html",
     "calculator.html",
@@ -139,16 +176,25 @@ test("public pages include real footer navigation routes", () => {
     "terms.html"
   ];
   const footerRoutes = [
-    ["/", "Dashboard"],
+    ["/home.html", "Home"],
+    ["/dashboard.html", "Dashboard"],
     ["/guide.html", "Setup Guide"],
     ["/helper.html", "Install Helper"],
+    ["/helper-health.html", "Helper Health"],
     ["/learn.html", "Learn"],
     ["/faq.html", "FAQ"],
     ["/calculator.html", "Calculator"],
+    ["/changelog.html", "Changelog"],
     ["/contact.html", "Contact Us"],
     ["/privacy.html", "Privacy Policy"],
     ["/terms.html", "Terms of Service"]
   ];
+
+  for (const file of ["index.html", "home.html"]) {
+    const html = fs.readFileSync(path.join(publicDir, file), "utf8");
+    assert.doesNotMatch(html, /class="site-footer"/, `${file} should be a footerless command center`);
+    assert.match(html, /class="command-center"/, `${file} should include the command center`);
+  }
 
   for (const file of pageFiles) {
     const html = fs.readFileSync(path.join(publicDir, file), "utf8");
@@ -166,9 +212,11 @@ test("public pages include real footer navigation routes", () => {
   }
 
   for (const [route] of footerRoutes) {
-    const expectedFile = route === "/" ? "index.html" : route.slice(1);
+    const expectedFile = route.slice(1);
     assert.ok(fs.existsSync(path.join(publicDir, expectedFile)), `${route} should resolve to a real file`);
   }
+
+  assert.ok(fs.existsSync(path.join(publicDir, "index.html")), "/ should resolve to the command center");
 
   assert.equal(fs.existsSync(path.join(publicDir, "blog.html")), false);
   assert.equal(fs.existsSync(path.join(publicDir, "plans.html")), false);
@@ -195,6 +243,9 @@ test("new resource pages contain current workflow, legal, and calculator content
   const faq = fs.readFileSync(path.resolve(__dirname, "../src/public/faq.html"), "utf8");
   const calculator = fs.readFileSync(path.resolve(__dirname, "../src/public/calculator.html"), "utf8");
   const contact = fs.readFileSync(path.resolve(__dirname, "../src/public/contact.html"), "utf8");
+  const helperHealth = fs.readFileSync(path.resolve(__dirname, "../src/public/helper-health.html"), "utf8");
+  const helperHealthScript = fs.readFileSync(path.resolve(__dirname, "../src/public/helper-health.js"), "utf8");
+  const changelog = fs.readFileSync(path.resolve(__dirname, "../src/public/changelog.html"), "utf8");
   const privacy = fs.readFileSync(path.resolve(__dirname, "../src/public/privacy.html"), "utf8");
   const terms = fs.readFileSync(path.resolve(__dirname, "../src/public/terms.html"), "utf8");
   const css = fs.readFileSync(path.resolve(__dirname, "../src/public/styles.css"), "utf8");
@@ -217,8 +268,24 @@ test("new resource pages contain current workflow, legal, and calculator content
   assert.match(contact, /action="\/api\/contact"/);
   assert.match(contact, /name="website"/);
   assert.match(contact, /private\s+contact form/);
+  assert.match(contact, /CONTACT_EMAIL_NOT_CONFIGURED/);
+  assert.match(contact, /submitButton\.disabled = true/);
+  assert.doesNotMatch(contact, /maxlength=/);
+  assert.match(contact, /CONTACT_TO_EMAIL/);
+  assert.match(contact, /CONTACT_FROM_EMAIL/);
+  assert.match(contact, /RESEND_API_KEY/);
+  assert.match(contact, /Contact email is not configured yet/);
   assert.doesNotMatch(contact, /legendharsh21@gmail\.com/);
   assert.doesNotMatch(contact, /Contact details are not published yet/);
+  assert.match(helperHealth, /Check the Chrome helper/);
+  assert.match(helperHealth, /id="healthGrid"/);
+  assert.match(helperHealth, /CC Auto must be able to use/);
+  assert.match(helperHealthScript, /requestExtension\("status"/);
+  assert.match(helperHealthScript, /fetch\("\/healthz"/);
+  assert.match(helperHealthScript, /onInvestingPage/);
+  assert.match(changelog, /0\.2\.8 - Private-Beta Completion/);
+  assert.match(changelog, /Helper-breaking/);
+  assert.match(changelog, /Command Center/);
   assert.match(privacy, /Last updated/);
   assert.match(privacy, /Information stored in your browser/);
   assert.match(privacy, /browser localStorage/);
@@ -241,6 +308,22 @@ test("new resource pages contain current workflow, legal, and calculator content
   assert.match(css, /\.calculator-grid/);
   assert.match(css, /\.calculator-output/);
   assert.match(css, /\.faq-list/);
+  assert.match(css, /\.health-grid/);
+  assert.match(css, /\.release-panel/);
+  assert.match(css, /:focus-visible/);
+});
+
+test("public asset cache version matches the current helper version", () => {
+  const publicDir = path.resolve(__dirname, "../src/public");
+  const htmlFiles = fs
+    .readdirSync(publicDir)
+    .filter((file) => /\.html$/.test(file));
+
+  for (const file of htmlFiles) {
+    const html = fs.readFileSync(path.join(publicDir, file), "utf8");
+    assert.doesNotMatch(html, /\?v=0\.2\.6/, `${file} has a stale asset version`);
+    assert.match(html, /\?v=0\.2\.8/, `${file} should use the current asset version`);
+  }
 });
 
 test("calculator helper formulas update expected values", () => {
@@ -266,11 +349,17 @@ test("new static footer pages are served by the app", async () => {
   const server = createAppServer();
   const base = await listen(server);
   const routes = [
+    "/",
+    "/home.html",
+    "/dashboard.html",
     "/learn.html",
     "/faq.html",
     "/calculator.html",
     "/calculator.js",
     "/contact.html",
+    "/helper-health.html",
+    "/helper-health.js",
+    "/changelog.html",
     "/privacy.html",
     "/terms.html"
   ];
@@ -280,6 +369,33 @@ test("new static footer pages are served by the app", async () => {
     for (const response of responses) {
       assert.equal(response.status, 200);
     }
+  } finally {
+    await close(server);
+  }
+});
+
+test("health and version endpoints expose safe release metadata", async () => {
+  const server = createAppServer();
+  const base = await listen(server);
+
+  try {
+    const [healthResponse, versionResponse] = await Promise.all([
+      fetch(`${base}/healthz`),
+      fetch(`${base}/api/version`)
+    ]);
+    const health = await healthResponse.json();
+    const version = await versionResponse.json();
+
+    assert.equal(healthResponse.status, 200);
+    assert.equal(versionResponse.status, 200);
+    assert.equal(health.ok, true);
+    assert.equal(health.app, "wheel-strategy-screener");
+    assert.equal(version.app, "wheel-strategy-screener");
+    assert.equal(version.appVersion, "0.2.8");
+    assert.equal(version.helperVersion, "0.2.8");
+    assert.equal(typeof health.uptimeSeconds, "number");
+    assert.doesNotMatch(JSON.stringify(health), /RESEND|CONTACT_TO_EMAIL|legendharsh21@gmail\.com/);
+    assert.doesNotMatch(JSON.stringify(version), /RESEND|CONTACT_TO_EMAIL|legendharsh21@gmail\.com/);
   } finally {
     await close(server);
   }
@@ -341,7 +457,7 @@ test("contact API validates fields and sends with injected mailer", async () => 
         name: "Harsh",
         email: "harsh@example.com",
         subject: "Setup help",
-        message: "I need help setting up the helper."
+        message: "hi"
       })
     });
     const payload = await success.json();
@@ -353,14 +469,169 @@ test("contact API validates fields and sends with injected mailer", async () => 
       name: "Harsh",
       email: "harsh@example.com",
       subject: "Setup help",
-      message: "I need help setting up the helper."
+      message: "hi"
     });
   } finally {
     await close(server);
   }
 });
 
-test("contact API reports missing SMTP configuration when no mailer is injected", async () => {
+test("contact API sends through Resend HTTPS when configured", async () => {
+  const previousEnv = {
+    CONTACT_TO_EMAIL: process.env.CONTACT_TO_EMAIL,
+    CONTACT_FROM_EMAIL: process.env.CONTACT_FROM_EMAIL,
+    RESEND_API_KEY: process.env.RESEND_API_KEY
+  };
+  const previousFetch = global.fetch;
+  const requests = [];
+
+  process.env.CONTACT_TO_EMAIL = "operator@example.com";
+  process.env.CONTACT_FROM_EMAIL = "Wheel Strategy Screener <notifications@example.com>";
+  process.env.RESEND_API_KEY = "test_resend_key";
+
+  global.fetch = async (url, options) => {
+    requests.push({ url, options });
+    return new Response(JSON.stringify({ id: "email_test" }), {
+      status: 200,
+      headers: { "content-type": "application/json" }
+    });
+  };
+
+  const server = createAppServer();
+  const base = await listen(server);
+
+  try {
+    const response = await previousFetch(`${base}/api/contact`, {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({
+        name: "Harsh",
+        email: "harsh@example.com",
+        subject: "Setup help",
+        message: "hi"
+      })
+    });
+    const payload = await response.json();
+
+    assert.equal(response.status, 200);
+    assert.equal(payload.ok, true);
+    assert.equal(requests.length, 1);
+    assert.equal(requests[0].url, "https://api.resend.com/emails");
+    assert.equal(requests[0].options.method, "POST");
+    assert.equal(requests[0].options.headers.authorization, "Bearer test_resend_key");
+
+    const emailPayload = JSON.parse(requests[0].options.body);
+    assert.equal(emailPayload.from, "Wheel Strategy Screener <notifications@example.com>");
+    assert.deepEqual(emailPayload.to, ["operator@example.com"]);
+    assert.equal(emailPayload.reply_to, "harsh@example.com");
+    assert.equal(emailPayload.subject, "[Wheel Strategy Screener] Setup help");
+    assert.match(emailPayload.text, /Reply email: harsh@example\.com/);
+    assert.match(emailPayload.text, /\nhi$/);
+  } finally {
+    await close(server);
+    global.fetch = previousFetch;
+    for (const [key, value] of Object.entries(previousEnv)) {
+      if (value === undefined) {
+        delete process.env[key];
+      } else {
+        process.env[key] = value;
+      }
+    }
+  }
+});
+
+test("contact form has no public character limits", () => {
+  const contact = fs.readFileSync(path.resolve(__dirname, "../src/public/contact.html"), "utf8");
+  const serverSource = fs.readFileSync(path.resolve(__dirname, "../src/server.js"), "utf8");
+
+  assert.doesNotMatch(contact, /maxlength=/);
+  assert.doesNotMatch(contact, /AbortController/);
+  assert.doesNotMatch(serverSource, /connectionTimeout|greetingTimeout|socketTimeout/);
+  assert.doesNotMatch(serverSource, /Message must be at least 10 characters/);
+  assert.doesNotMatch(serverSource, /\.slice\(0, 5000\)/);
+  assert.match(serverSource, /function cleanContactMessage\(value\)[\s\S]*?\.trim\(\);/);
+});
+
+test("contact API reports safe email failure messages", async () => {
+  const authServer = createAppServer({
+    contactMailer: async () => {
+      const error = new Error("Unauthorized");
+      error.code = "CONTACT_EMAIL_AUTH_FAILED";
+      error.responseCode = 401;
+      throw error;
+    }
+  });
+  const connectionServer = createAppServer({
+    contactMailer: async () => {
+      const error = new Error("Network unavailable");
+      error.code = "CONTACT_EMAIL_CONNECTION_FAILED";
+      throw error;
+    }
+  });
+  const sendServer = createAppServer({
+    contactMailer: async () => {
+      const error = new Error("Provider rejected sender");
+      error.code = "CONTACT_EMAIL_SEND_FAILED";
+      throw error;
+    }
+  });
+  const baseAuth = await listen(authServer);
+  const baseConnection = await listen(connectionServer);
+  const baseSend = await listen(sendServer);
+  const body = JSON.stringify({
+    name: "Harsh",
+    email: "harsh@example.com",
+    subject: "Setup help",
+    message: "hi"
+  });
+
+  try {
+    const authResponse = await fetch(`${baseAuth}/api/contact`, {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body
+    });
+    const authPayload = await authResponse.json();
+    assert.equal(authResponse.status, 502);
+    assert.equal(authPayload.code, "CONTACT_EMAIL_AUTH_FAILED");
+    assert.match(authPayload.error, /Resend rejected/);
+
+    const connectionResponse = await fetch(`${baseConnection}/api/contact`, {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body
+    });
+    const connectionPayload = await connectionResponse.json();
+    assert.equal(connectionResponse.status, 502);
+    assert.equal(connectionPayload.code, "CONTACT_EMAIL_CONNECTION_FAILED");
+    assert.match(connectionPayload.error, /could not reach Resend/);
+
+    const sendResponse = await fetch(`${baseSend}/api/contact`, {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body
+    });
+    const sendPayload = await sendResponse.json();
+    assert.equal(sendResponse.status, 502);
+    assert.equal(sendPayload.code, "CONTACT_EMAIL_SEND_FAILED");
+    assert.match(sendPayload.error, /verified sender/);
+  } finally {
+    await close(authServer);
+    await close(connectionServer);
+    await close(sendServer);
+  }
+});
+
+test("contact API reports missing HTTPS email configuration when no mailer is injected", async () => {
+  const previousEnv = {
+    CONTACT_TO_EMAIL: process.env.CONTACT_TO_EMAIL,
+    CONTACT_FROM_EMAIL: process.env.CONTACT_FROM_EMAIL,
+    RESEND_API_KEY: process.env.RESEND_API_KEY
+  };
+  delete process.env.CONTACT_TO_EMAIL;
+  delete process.env.CONTACT_FROM_EMAIL;
+  delete process.env.RESEND_API_KEY;
+
   const server = createAppServer();
   const base = await listen(server);
 
@@ -378,14 +649,22 @@ test("contact API reports missing SMTP configuration when no mailer is injected"
     const payload = await response.json();
 
     assert.equal(response.status, 503);
-    assert.match(payload.error, /Contact email is not configured|Email dependency is not installed/);
+    assert.equal(payload.code, "CONTACT_EMAIL_NOT_CONFIGURED");
+    assert.match(payload.error, /CONTACT_TO_EMAIL, CONTACT_FROM_EMAIL, and RESEND_API_KEY/);
   } finally {
     await close(server);
+    for (const [key, value] of Object.entries(previousEnv)) {
+      if (value === undefined) {
+        delete process.env[key];
+      } else {
+        process.env[key] = value;
+      }
+    }
   }
 });
 
 test("dashboard title and filtered SKIP rows match current UI rules", () => {
-  const index = fs.readFileSync(path.resolve(__dirname, "../src/public/index.html"), "utf8");
+  const index = fs.readFileSync(path.resolve(__dirname, "../src/public/dashboard.html"), "utf8");
   const appSource = fs.readFileSync(path.resolve(__dirname, "../src/public/app.js"), "utf8");
   const css = fs.readFileSync(path.resolve(__dirname, "../src/public/styles.css"), "utf8");
 
@@ -409,14 +688,14 @@ test("dashboard title and filtered SKIP rows match current UI rules", () => {
   assert.match(css, /\.title-block\s*\{/);
   assert.match(css, /\.title-subtitle\s*\{/);
   assert.match(css, /--surface-glass:/);
-  assert.match(css, /\.topbar\s*\{[\s\S]*?background:\s*var\(--surface-glass\)/);
+  assert.match(css, /\.topbar\s*\{[\s\S]*?background:\s*linear-gradient/);
   assert.doesNotMatch(css, /backdrop-filter/);
   assert.match(css, /button,\s*input,\s*select,\s*textarea/);
   assert.match(css, /\.connection-subtitle-row\s*\{/);
   assert.match(css, /\.session-pill\.missing\s*\{[\s\S]*?background:\s*#fff7d8/);
   assert.match(css, /\.connection-disclosure\s*\{/);
-  assert.match(index, /href="\/favicon\.ico\?v=0\.2\.6"/);
-  assert.match(index, /href="\/favicon-32\.png\?v=0\.2\.6"/);
+  assert.match(index, /href="\/favicon\.ico\?v=0\.2\.8"/);
+  assert.match(index, /href="\/favicon-32\.png\?v=0\.2\.8"/);
   assert.doesNotMatch(index, /class="brand-logo"/);
   assert.match(index, /Install the Chrome helper to scan Robinhood screeners, positions, and option chains\./);
   assert.match(index, /reads screener symbols, stock positions, and option-chain quotes only/);
@@ -426,7 +705,7 @@ test("dashboard title and filtered SKIP rows match current UI rules", () => {
 });
 
 test("dashboard first-visit walkthrough uses versioned local storage dismissal", () => {
-  const index = fs.readFileSync(path.resolve(__dirname, "../src/public/index.html"), "utf8");
+  const index = fs.readFileSync(path.resolve(__dirname, "../src/public/dashboard.html"), "utf8");
   const appSource = fs.readFileSync(path.resolve(__dirname, "../src/public/app.js"), "utf8");
 
   assert.match(index, /id="onboardingDialog"/);
@@ -445,7 +724,7 @@ test("dashboard first-visit walkthrough uses versioned local storage dismissal",
 });
 
 test("dashboard manages custom CSP screeners and settings presets locally", () => {
-  const index = fs.readFileSync(path.resolve(__dirname, "../src/public/index.html"), "utf8");
+  const index = fs.readFileSync(path.resolve(__dirname, "../src/public/dashboard.html"), "utf8");
   const appSource = fs.readFileSync(path.resolve(__dirname, "../src/public/app.js"), "utf8");
   const serverSource = fs.readFileSync(path.resolve(__dirname, "../src/server.js"), "utf8");
   const readme = fs.readFileSync(path.resolve(__dirname, "../README.md"), "utf8");
@@ -493,7 +772,7 @@ test("dashboard manages custom CSP screeners and settings presets locally", () =
 });
 
 test("dashboard exposes CSP and CC source modes", () => {
-  const index = fs.readFileSync(path.resolve(__dirname, "../src/public/index.html"), "utf8");
+  const index = fs.readFileSync(path.resolve(__dirname, "../src/public/dashboard.html"), "utf8");
   const appSource = fs.readFileSync(path.resolve(__dirname, "../src/public/app.js"), "utf8");
 
   assert.match(index, /id="cspInputModes"/);
@@ -538,12 +817,35 @@ test("dashboard exposes CSP and CC source modes", () => {
   assert.match(appSource, /hideUnavailableControl\.hidden = !isActiveAutoMode\(\)/);
 });
 
+test("dashboard exposes release metadata and safe diagnostics export", () => {
+  const dashboard = fs.readFileSync(path.resolve(__dirname, "../src/public/dashboard.html"), "utf8");
+  const appSource = fs.readFileSync(path.resolve(__dirname, "../src/public/app.js"), "utf8");
+  const css = fs.readFileSync(path.resolve(__dirname, "../src/public/styles.css"), "utf8");
+
+  assert.match(dashboard, /id="diagnosticsButton"/);
+  assert.match(dashboard, /Export Diagnostics/);
+  assert.match(dashboard, /class="release-panel"/);
+  assert.match(dashboard, /id="appVersionLabel"/);
+  assert.match(dashboard, /id="helperVersionLabel"/);
+  assert.match(dashboard, /id="deployedAtLabel"/);
+  assert.match(appSource, /async function loadVersionInfo/);
+  assert.match(appSource, /fetchJson\("\/api\/version"\)/);
+  assert.match(appSource, /function buildDiagnosticsExport/);
+  assert.match(appSource, /function exportDiagnostics/);
+  assert.match(appSource, /helperDiagnostics: safeDiagnosticsBySymbol/);
+  assert.match(appSource, /optionRequestCount/);
+  assert.match(appSource, /wheel-screener-diagnostics-\$\{state\.strategy\}/);
+  assert.doesNotMatch(appSource.match(/function buildDiagnosticsExport\(\)[\s\S]*?\n\}/)?.[0] || "", /CONTACT_TO_EMAIL|RESEND_API_KEY|cookie|password/i);
+  assert.match(css, /\.diagnostics-button/);
+  assert.match(css, /\.release-panel/);
+});
+
 test("dashboard control and manual CSP layouts keep desktop content visible", () => {
   const css = fs.readFileSync(path.resolve(__dirname, "../src/public/styles.css"), "utf8");
   const appSource = fs.readFileSync(path.resolve(__dirname, "../src/public/app.js"), "utf8");
 
-  assert.match(css, /grid-template-columns:\s*minmax\(156px,\s*184px\)[\s\S]*?minmax\(320px,\s*356px\)[\s\S]*?minmax\(132px,\s*142px\)/);
-  assert.match(css, /\.screener-select-row\s*\{[\s\S]*?grid-template-columns:\s*minmax\(190px,\s*1fr\) auto/);
+  assert.match(css, /grid-template-columns:\s*minmax\(156px,\s*184px\)[\s\S]*?minmax\(360px,\s*396px\)[\s\S]*?minmax\(232px,\s*248px\)[\s\S]*?minmax\(132px,\s*142px\)/);
+  assert.match(css, /\.screener-select-row\s*\{[\s\S]*?grid-template-columns:\s*minmax\(230px,\s*1fr\) auto/);
   assert.match(css, /body\[data-strategy="csp"\]\s+#exportButton\s*\{[\s\S]*?grid-column:\s*7/);
   assert.match(css, /body\[data-strategy="csp"\]\[data-csp-input-mode="manual"\]\s+\.source-control\s*\{[\s\S]*?grid-column:\s*4/);
   assert.match(css, /body\[data-strategy="csp"\]\[data-csp-input-mode="manual"\]\s+#exportButton\s*\{[\s\S]*?grid-column:\s*6/);
@@ -560,6 +862,7 @@ test("dashboard control and manual CSP layouts keep desktop content visible", ()
   assert.match(css, /body\[data-strategy="csp"\]\[data-csp-input-mode="auto"\]\s+\.control-band/);
   assert.match(css, /@media \(max-width: 1180px\)/);
   assert.match(css, /@media \(max-width: 980px\)/);
+  assert.match(css, /@media \(max-width: 540px\)[\s\S]*?\.screener-select-row\s*\{[\s\S]*?grid-template-columns:\s*1fr/);
   assert.match(css, /\.site-footer\s*\{[\s\S]*?margin:\s*132px calc\(50% - 50vw\) -52px/);
   assert.match(css, /\.segment\s*\{[\s\S]*?min-width:\s*0/);
   assert.match(css, /\.segment\s*\{[\s\S]*?white-space:\s*nowrap/);
@@ -634,7 +937,7 @@ test("dashboard persists manual rows in local storage only", () => {
 });
 
 test("dashboard run button switches between first scan and refresh states", () => {
-  const index = fs.readFileSync(path.resolve(__dirname, "../src/public/index.html"), "utf8");
+  const index = fs.readFileSync(path.resolve(__dirname, "../src/public/dashboard.html"), "utf8");
   const appSource = fs.readFileSync(path.resolve(__dirname, "../src/public/app.js"), "utf8");
   const css = fs.readFileSync(path.resolve(__dirname, "../src/public/styles.css"), "utf8");
   const scanningHelper = appSource.match(/function setRunButtonScanning\(\) \{[\s\S]*?\n\}/)?.[0] || "";
@@ -660,10 +963,16 @@ test("dashboard run button switches between first scan and refresh states", () =
 test("helper install instructions match manifest version", () => {
   const helper = fs.readFileSync(path.resolve(__dirname, "../src/public/helper.html"), "utf8");
   const readme = fs.readFileSync(path.resolve(__dirname, "../README.md"), "utf8");
+  const manifest = JSON.parse(
+    fs.readFileSync(path.resolve(__dirname, "../extension/manifest.json"), "utf8")
+  );
+  const versionPattern = new RegExp(manifest.version.replace(/\./g, "\\."));
 
-  assert.match(helper, /0\.2\.6/);
+  assert.match(helper, versionPattern);
+  assert.doesNotMatch(helper, /0\.2\.7/);
   assert.doesNotMatch(helper, /0\.1\.9/);
-  assert.match(readme, /0\.2\.6/);
+  assert.match(readme, versionPattern);
+  assert.doesNotMatch(readme, /0\.2\.7/);
   assert.doesNotMatch(readme, /0\.1\.9/);
 });
 
@@ -671,7 +980,7 @@ test("public docs describe the current extension workflow", () => {
   const docs = [
     fs.readFileSync(path.resolve(__dirname, "../src/public/guide.html"), "utf8"),
     fs.readFileSync(path.resolve(__dirname, "../src/public/helper.html"), "utf8"),
-    fs.readFileSync(path.resolve(__dirname, "../src/public/index.html"), "utf8"),
+    fs.readFileSync(path.resolve(__dirname, "../src/public/dashboard.html"), "utf8"),
     fs.readFileSync(path.resolve(__dirname, "../README.md"), "utf8")
   ].join("\n");
 
@@ -684,6 +993,11 @@ test("public docs describe the current extension workflow", () => {
   assert.match(docs, /option-chain quotes/);
   assert.match(docs, /bid \/ strike/);
   assert.match(docs, /locally in your browser/);
+  assert.match(docs, /All linked public pages are intentional app surfaces/);
+  assert.match(docs, /Resend's HTTPS\s+email API/);
+  assert.match(docs, /Current Completion Status/);
+  assert.match(docs, /Release checklist/);
+  assert.match(docs, /strategy education and app help assistant/);
 });
 
 test("guide and README explain Scan before Refresh", () => {
@@ -1576,7 +1890,7 @@ test("Chrome helper does not request debugger permission", () => {
     fs.readFileSync(path.resolve(__dirname, "../extension/manifest.json"), "utf8")
   );
 
-  assert.equal(manifest.version, "0.2.6");
+  assert.equal(manifest.version, "0.2.8");
   assert.ok(!manifest.permissions.includes("debugger"));
 });
 
@@ -1591,13 +1905,24 @@ test("Chrome helper wires option quote extraction action", () => {
   assert.match(background, /extractPutOptionQuotes/);
   assert.match(background, /extractCallOptionQuotes/);
   assert.match(background, /extractStockPositions/);
+  assert.match(background, /async function helperStatus/);
+  assert.match(background, /message\?\.action === "status"/);
+  assert.match(background, /onInvestingPage/);
   assert.match(background, /account\/investing/);
   assert.match(contentRobinhood, /extractPutOptionQuotes/);
   assert.match(contentRobinhood, /extractCallOptionQuotes/);
   assert.match(contentRobinhood, /extractStockPositions/);
-  assert.match(contentRobinhood, /accountOptionLabels/);
+  assert.match(contentRobinhood, /ensureAccountInvestingPage/);
+  assert.match(contentRobinhood, /collectStockPositionsFromTable/);
+  assert.match(contentRobinhood, /stockTableHeaderMap/);
+  assert.match(contentRobinhood, /accountOptionDescriptors/);
+  assert.match(contentRobinhood, /collectStockPositionsForAccount/);
+  assert.match(contentRobinhood, /clickAccountOption/);
   assert.match(contentRobinhood, /parseShares/);
   assert.match(contentRobinhood, /parseAverageCost/);
+  assert.match(contentRobinhood, /gic1rUwO9ldk9zzcggr7uA/);
+  assert.match(contentRobinhood, /URCNCRkOrsFeQ6BHrJU3Q/);
+  assert.match(contentRobinhood, /CC Auto can import Robinhood stock positions only from https:\/\/robinhood\.com\/account\/investing/);
   assert.match(contentRobinhood, /ensureOptionSide\(symbol, "sell"\)/);
   assert.match(contentRobinhood, /ensureOptionMode\(symbol, "sell", normalizedType\)/);
   assert.match(contentRobinhood, /optionType === "call"/);
@@ -1638,8 +1963,12 @@ test("guide documents both strategy workflows and return rules", () => {
   assert.match(guide, /Manual<\/strong> mode to type symbols/);
   assert.match(guide, /switch to <strong>Auto<\/strong> and select a saved Robinhood screener/);
   assert.match(guide, /Switch to <strong>Auto<\/strong> to import visible stock positions/);
+  assert.match(guide, /Auto only imports from <code>robinhood\.com\/account\/investing<\/code>/);
   assert.match(guide, /Hide unavailable and ineligible rows/);
   assert.match(guide, /Older settings files/);
+  assert.match(guide, /Contact form and support email/);
+  assert.match(guide, /Resend's HTTPS email API/);
+  assert.match(guide, /RESEND_API_KEY/);
   assert.match(guide, /floor\(shares \/ 100\)/);
   assert.match(guide, /Wheel Strategy 1/);
   assert.match(guide, /Wheel Strategy 3/);
@@ -1684,15 +2013,18 @@ test("portfolio input is wired for reallocation without refresh", () => {
 });
 
 test("dashboard has linked return inputs and cached return-target finalization", () => {
-  const index = fs.readFileSync(path.resolve(__dirname, "../src/public/index.html"), "utf8");
+  const index = fs.readFileSync(path.resolve(__dirname, "../src/public/dashboard.html"), "utf8");
   const appSource = fs.readFileSync(path.resolve(__dirname, "../src/public/app.js"), "utf8");
 
+  assert.match(index, /id="portfolioInput"[\s\S]*?type="text"[\s\S]*?inputmode="decimal"[\s\S]*?autocomplete="off"/);
   assert.match(index, /id="weeklyReturnInput"/);
   assert.match(index, /id="yearlyReturnInput"/);
   assert.doesNotMatch(index, />CSP return target</);
   assert.match(index, /role="group" aria-label="Option return target"/);
+  assert.match(index, /id="weeklyReturnInput"[\s\S]*?type="text"[\s\S]*?inputmode="decimal"/);
   assert.match(index, /id="weeklyReturnInput"[\s\S]*?value="1"[\s\S]*?autocomplete="off"/);
   assert.match(index, /value="67\.7689"/);
+  assert.match(index, /id="yearlyReturnInput"[\s\S]*?type="text"[\s\S]*?inputmode="decimal"/);
   assert.match(index, /id="yearlyReturnInput"[\s\S]*?value="67\.7689"[\s\S]*?autocomplete="off"/);
   assert.match(appSource, /const TRADING_WEEKS_PER_YEAR = 52/);
   assert.match(appSource, /const DEFAULT_CSP_WEEKLY_RETURN_PERCENT = 1/);
@@ -1707,11 +2039,15 @@ test("dashboard has linked return inputs and cached return-target finalization",
   assert.match(appSource, /function commitReturnTargetFromInputs/);
   assert.match(appSource, /const selectedReturn = commitReturnTargetFromInputs\(\)/);
   assert.match(appSource, /positions: positionsForScan/);
+  assert.match(appSource, /const CARET_CONTROL_INPUT_IDS = new Set/);
+  assert.match(appSource, /function captureActiveControlInput/);
+  assert.match(appSource, /function restoreActiveControlInput/);
+  assert.match(appSource, /restoreActiveControlInput\(activeControlInput\)/);
   assert.match(appSource, /window\.addEventListener\("pageshow"/);
 });
 
 test("dashboard exposes covered-call strategy controls", () => {
-  const index = fs.readFileSync(path.resolve(__dirname, "../src/public/index.html"), "utf8");
+  const index = fs.readFileSync(path.resolve(__dirname, "../src/public/dashboard.html"), "utf8");
   const appSource = fs.readFileSync(path.resolve(__dirname, "../src/public/app.js"), "utf8");
   const css = fs.readFileSync(path.resolve(__dirname, "../src/public/styles.css"), "utf8");
 
@@ -1758,6 +2094,8 @@ test("dashboard exposes covered-call strategy controls", () => {
   assert.match(css, /\.cc-symbol-input\s*\{[\s\S]*?width:\s*10ch/);
   assert.match(css, /\.cc-average-cost-input\s*\{[\s\S]*?width:\s*11ch/);
   assert.match(css, /\.cc-contracts-input\s*\{[\s\S]*?width:\s*7ch/);
+  assert.match(appSource, /data-cc-field="averageCost"[\s\S]*?type="text"[\s\S]*?inputmode="decimal"[\s\S]*?autocomplete="off"/);
+  assert.match(appSource, /data-cc-field="contracts"[\s\S]*?type="text"[\s\S]*?inputmode="numeric"[\s\S]*?autocomplete="off"/);
   assert.match(appSource, /runCoveredCallScan/);
   assert.match(appSource, /extractCallOptionQuotes/);
   assert.match(appSource, /extractStockPositions/);
@@ -1769,12 +2107,12 @@ test("dashboard exposes covered-call strategy controls", () => {
   assert.match(appSource, /Weekly Return/);
   assert.match(appSource, /Positions/);
   assert.match(appSource, /const activeCcInput = captureActiveCcInput\(\)/);
-  assert.match(appSource, /restoreActiveCcInput\(activeCcInput\)/);
+  assert.match(appSource, /restoreActiveCcInput\(latestCcInput\)/);
   assert.match(appSource, /CC_TABLE_LABELS/);
 });
 
 test("results table is compact on desktop and stacked on mobile", () => {
-  const index = fs.readFileSync(path.resolve(__dirname, "../src/public/index.html"), "utf8");
+  const index = fs.readFileSync(path.resolve(__dirname, "../src/public/dashboard.html"), "utf8");
   const css = fs.readFileSync(path.resolve(__dirname, "../src/public/styles.css"), "utf8");
   const appSource = fs.readFileSync(path.resolve(__dirname, "../src/public/app.js"), "utf8");
 

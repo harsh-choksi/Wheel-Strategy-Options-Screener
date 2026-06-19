@@ -5,10 +5,10 @@
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <meta name="description" content="Frequently asked questions for Wheel Strategy Screener." />
     <title>FAQ - Wheel Strategy Screener</title>
-    <link rel="icon" href="/favicon.ico?v=0.2.6" sizes="any" />
-    <link rel="icon" href="/favicon-32.png?v=0.2.6" sizes="32x32" type="image/png" />
-    <link rel="icon" href="/favicon-16.png?v=0.2.6" sizes="16x16" type="image/png" />
-    <link rel="apple-touch-icon" href="/apple-touch-icon.png?v=0.2.6" />
+    <link rel="icon" href="/favicon.ico?v=0.2.8" sizes="any" />
+    <link rel="icon" href="/favicon-32.png?v=0.2.8" sizes="32x32" type="image/png" />
+    <link rel="icon" href="/favicon-16.png?v=0.2.8" sizes="16x16" type="image/png" />
+    <link rel="apple-touch-icon" href="/apple-touch-icon.png?v=0.2.8" />
     <link rel="stylesheet" href="/styles.css" />
   </head>
   <body>
@@ -24,7 +24,7 @@
         </div>
         <div class="topbar-actions">
           <a class="secondary-button" href="/guide.html">Setup Guide</a>
-          <a class="secondary-button" href="/">Back to Screener</a>
+          <a class="secondary-button" href="/dashboard.html">Back to Dashboard</a>
         </div>
       </header>
 
@@ -56,11 +56,27 @@
             </dd>
           </div>
           <div>
+            <dt>Why does the site open a Command Center first?</dt>
+            <dd>
+              The Command Center keeps the private beta simple: choose CSP Dashboard or CC Dashboard.
+              Returning users who open the root page resume the last selected strategy, while the
+              Home button returns to the Command Center without auto-resume.
+            </dd>
+          </div>
+          <div>
             <dt>Why do I need the Chrome helper?</dt>
             <dd>
               Robinhood does not provide a public screener, account-position, and option-chain
               API for this workflow. The helper reads visible symbols, stock position rows, and
               quote values from your logged-in Chrome tab.
+            </dd>
+          </div>
+          <div>
+            <dt>What does Helper Health check?</dt>
+            <dd>
+              Helper Health checks whether the extension bridge answers, which helper version is
+              loaded, whether a Robinhood tab is open, whether CC Auto is on
+              robinhood.com/account/investing, and whether the app server health endpoint answers.
             </dd>
           </div>
           <div>
@@ -117,6 +133,15 @@
             </dd>
           </div>
           <div>
+            <dt>Why can an eligible CSP row still be Unused?</dt>
+            <dd>
+              CSP contracts require cash collateral equal to strike times 100. If the normal
+              allocation cannot fit a contract, small portfolios get a fallback pass that assigns
+              one affordable contract at a time in scan order. Rows that still cannot fit remain
+              Unused.
+            </dd>
+          </div>
+          <div>
             <dt>What does Unavailable mean?</dt>
             <dd>
               TradingView data or Robinhood option quotes could not be read for that row.
@@ -138,6 +163,14 @@
               Yes. TradingView data and Robinhood option quotes can be delayed, unavailable,
               or incomplete. Always verify live quotes, spread, expiration, liquidity, and
               order details in your brokerage before trading.
+            </dd>
+          </div>
+          <div>
+            <dt>What is the Diagnostics export?</dt>
+            <dd>
+              After a scan, Export Diagnostics downloads safe JSON with versions, row statuses,
+              safe errors, option-request counts, and helper diagnostics. It excludes credentials,
+              cookies, contact email destinations, and email API keys.
             </dd>
           </div>
           <div>
@@ -169,15 +202,18 @@
           <nav class="footer-columns" aria-label="Footer links">
             <div class="footer-column">
               <h3>Product</h3>
-              <a href="/">Dashboard</a>
-              <a href="/guide.html">Setup Guide</a>
-              <a href="/helper.html">Install Helper</a>
+            <a href="/home.html">Home</a>
+            <a href="/dashboard.html">Dashboard</a>
+            <a href="/guide.html">Setup Guide</a>
+            <a href="/helper.html">Install Helper</a>
+            <a href="/helper-health.html">Helper Health</a>
             </div>
             <div class="footer-column">
               <h3>Resources</h3>
-              <a href="/learn.html">Learn</a>
-              <a href="/faq.html">FAQ</a>
-              <a href="/calculator.html">Calculator</a>
+            <a href="/learn.html">Learn</a>
+            <a href="/faq.html">FAQ</a>
+            <a href="/calculator.html">Calculator</a>
+            <a href="/changelog.html">Changelog</a>
             </div>
             <div class="footer-column">
               <h3>Company</h3>

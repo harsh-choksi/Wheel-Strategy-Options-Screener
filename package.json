@@ -1,6 +1,6 @@
 {
   "name": "wheel-strategy-screener",
-  "version": "0.1.0",
+  "version": "0.2.8",
   "private": true,
   "description": "End-of-week CSP and covered-call screener using TradingView data and a local Robinhood Chrome helper.",
   "main": "src/server.js",
@@ -11,9 +11,6 @@
   },
   "engines": {
     "node": ">=20"
-  },
-  "dependencies": {
-    "nodemailer": "^6.9.16"
   },
   "devDependencies": {
     "playwright": "^1.60.0"

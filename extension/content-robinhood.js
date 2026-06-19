@@ -208,10 +208,13 @@
     const clientX = rect.left + rect.width / 2;
     const clientY = rect.top + rect.height / 2;
     const pointTarget = document.elementFromPoint(clientX, clientY);
-    const targets = [...new Set([pointTarget, element].filter(Boolean))];
+    const targets =
+      pointTarget && (pointTarget === element || element.contains?.(pointTarget))
+        ? [element]
+        : [...new Set([pointTarget, element].filter(Boolean))];
 
     for (const target of targets) {
-      for (const type of ["pointerover", "mouseover", "pointermove", "mousemove", "pointerdown", "mousedown", "pointerup", "mouseup", "click"]) {
+      for (const type of ["pointerover", "mouseover", "pointermove", "mousemove"]) {
         const isPointer = type.startsWith("pointer") && typeof PointerEvent === "function";
         const EventConstructor = isPointer ? PointerEvent : MouseEvent;
         target.dispatchEvent(
@@ -230,7 +233,19 @@
         );
       }
 
-      target.click?.();
+      if (typeof target.click === "function") {
+        target.click();
+      } else {
+        target.dispatchEvent(
+          new MouseEvent("click", {
+            bubbles: true,
+            cancelable: true,
+            view: window,
+            clientX,
+            clientY
+          })
+        );
+      }
     }
   }
 
@@ -634,6 +649,28 @@
     return match ? normalizeSymbol(match[1]) : null;
   }
 
+  function isAccountInvestingPage() {
+    return window.location.pathname.replace(/\/+$/, "") === "/account/investing";
+  }
+
+  function ensureAccountInvestingPage() {
+    if (!isAccountInvestingPage()) {
+      throw new Error(
+        "CC Auto can import Robinhood stock positions only from https://robinhood.com/account/investing."
+      );
+    }
+  }
+
+  function parsePlainNumber(text) {
+    const normalized = normalizeText(text).replace(/,/g, "");
+    if (!/^-?\d+(?:\.\d+)?$/.test(normalized)) {
+      return null;
+    }
+
+    const parsed = Number.parseFloat(normalized);
+    return Number.isFinite(parsed) ? parsed : null;
+  }
+
   function parseShares(text) {
     const normalized = normalizeText(text).replace(/,/g, "");
     const afterLabel = normalized.match(/\b(?:shares?|quantity|qty)\b[^\d]{0,30}(\d+(?:\.\d+)?)/i);
@@ -649,6 +686,15 @@
     }
 
     return null;
+  }
+
+  function parseSharesCell(text) {
+    const plain = parsePlainNumber(text);
+    if (Number.isFinite(plain)) {
+      return plain;
+    }
+
+    return parseShares(text);
   }
 
   function parseAverageCost(text) {
@@ -668,6 +714,221 @@
     }
 
     return null;
+  }
+
+  function isStockTableHeaderText(text) {
+    return /^(?:name|symbol|shares|price|average cost|total return|equity)$/i.test(normalizeText(text));
+  }
+
+  function symbolFromSymbolCell(cell) {
+    if (!cell) {
+      return null;
+    }
+
+    const preferred = cell.querySelector?.('[class*="gic1rUwO9ldk9zzcggr7uA"]');
+    const preferredSymbol = normalizeSymbol(preferred?.textContent || "");
+    if (preferredSymbol) {
+      return preferredSymbol;
+    }
+
+    const anchors = cell.querySelectorAll ? [...cell.querySelectorAll("a[href]")] : [];
+    for (const anchor of anchors) {
+      const symbol = stockSymbolFromAnchor(anchor);
+      if (symbol) {
+        return symbol;
+      }
+    }
+
+    const tokens = normalizeText(cell.innerText || cell.textContent || "")
+      .split(/\s+/)
+      .map((token) => normalizeSymbol(token))
+      .filter(Boolean);
+    return tokens[0] || null;
+  }
+
+  function averageCostFromCell(cell) {
+    if (!cell) {
+      return null;
+    }
+
+    const preferred = cell.querySelector?.('[class*="URCNCRkOrsFeQ6BHrJU3Q"]');
+    const preferredCost = parseMoney(preferred?.textContent || "");
+    if (Number.isFinite(preferredCost)) {
+      return preferredCost;
+    }
+
+    return parseAverageCost(cell.innerText || cell.textContent || "") ?? parseMoney(cell.innerText || cell.textContent || "");
+  }
+
+  function visibleTextElements(selector) {
+    return [...document.querySelectorAll(selector)]
+      .filter(visible)
+      .map((element) => ({
+        element,
+        text: normalizeText(element.innerText || element.textContent || ""),
+        rect: element.getBoundingClientRect()
+      }))
+      .filter(({ text }) => text);
+  }
+
+  function findStocksHeading() {
+    return visibleTextElements("h1, h2, h3, h4, [role='heading'], div, span, p")
+      .filter(({ text }) => /^stocks$/i.test(text))
+      .sort((a, b) => a.rect.top - b.rect.top || a.rect.left - b.rect.left)[0]?.element || null;
+  }
+
+  function stockTableHeaderMap() {
+    const heading = findStocksHeading();
+    const headingRect = heading?.getBoundingClientRect?.();
+    const minTop = headingRect ? headingRect.bottom - 4 : 0;
+    const aliases = new Map([
+      ["name", "name"],
+      ["symbol", "symbol"],
+      ["shares", "shares"],
+      ["price", "price"],
+      ["total return", "totalReturn"],
+      ["equity", "equity"],
+      ["average cost", "averageCost"]
+    ]);
+    const headers = new Map();
+
+    for (const { element, text, rect } of visibleTextElements("th, [role='columnheader'], div, span, p")) {
+      const key = aliases.get(text.toLowerCase());
+      if (!key || rect.top < minTop) {
+        continue;
+      }
+
+      const existing = headers.get(key);
+      if (!existing || rect.top < existing.rect.top || (Math.abs(rect.top - existing.rect.top) <= 4 && rect.left < existing.rect.left)) {
+        headers.set(key, {
+          key,
+          element,
+          rect,
+          center: rect.left + rect.width / 2
+        });
+      }
+    }
+
+    if (!headers.has("symbol") || !headers.has("shares") || !headers.has("averageCost")) {
+      return null;
+    }
+
+    const headerBottom = Math.max(...[...headers.values()].map((header) => header.rect.bottom));
+    return {
+      heading,
+      headerBottom,
+      columns: [...headers.values()].sort((a, b) => a.center - b.center)
+    };
+  }
+
+  function stockTableCellCandidates(headerMap) {
+    const selectors = [
+      '[class*="qVizNsgJursdUUgiZtoQzg"]',
+      "td",
+      "[role='cell']"
+    ].join(", ");
+    const candidates = [];
+    const seen = new Set();
+
+    for (const element of [...document.querySelectorAll(selectors)].filter(visible)) {
+      if (seen.has(element)) {
+        continue;
+      }
+      seen.add(element);
+
+      const text = normalizeText(element.innerText || element.textContent || "");
+      const rect = element.getBoundingClientRect();
+      if (!text || rect.top < headerMap.headerBottom - 1 || isStockTableHeaderText(text)) {
+        continue;
+      }
+
+      candidates.push({
+        element,
+        text,
+        rect,
+        centerX: rect.left + rect.width / 2,
+        centerY: rect.top + rect.height / 2
+      });
+    }
+
+    return candidates.sort((a, b) => a.centerY - b.centerY || a.centerX - b.centerX);
+  }
+
+  function groupStockCellsByRow(cells) {
+    const rows = [];
+
+    for (const cell of cells) {
+      const existing = rows.find((row) => Math.abs(row.centerY - cell.centerY) <= 18);
+      if (existing) {
+        existing.cells.push(cell);
+        existing.centerY = (existing.centerY * (existing.cells.length - 1) + cell.centerY) / existing.cells.length;
+      } else {
+        rows.push({
+          centerY: cell.centerY,
+          cells: [cell]
+        });
+      }
+    }
+
+    return rows.map((row) => ({
+      ...row,
+      cells: row.cells.sort((a, b) => a.centerX - b.centerX)
+    }));
+  }
+
+  function nearestStockHeader(cell, columns) {
+    return columns
+      .map((column) => ({
+        column,
+        distance: Math.abs(column.center - cell.centerX)
+      }))
+      .sort((a, b) => a.distance - b.distance)[0]?.column || null;
+  }
+
+  function collectStockPositionsFromTable(accountName = currentAccountName()) {
+    const headerMap = stockTableHeaderMap();
+    if (!headerMap) {
+      return [];
+    }
+
+    const positions = [];
+    const seen = new Set();
+    const rows = groupStockCellsByRow(stockTableCellCandidates(headerMap));
+
+    for (const row of rows) {
+      const cellsByColumn = new Map();
+      for (const cell of row.cells) {
+        const header = nearestStockHeader(cell, headerMap.columns);
+        if (header && !cellsByColumn.has(header.key)) {
+          cellsByColumn.set(header.key, cell.element);
+        }
+      }
+
+      const symbolCell = cellsByColumn.get("symbol");
+      const sharesCell = cellsByColumn.get("shares");
+      const averageCostCell = cellsByColumn.get("averageCost");
+      const symbol = symbolFromSymbolCell(symbolCell);
+      const shares = parseSharesCell(sharesCell?.innerText || sharesCell?.textContent || "");
+      const averageCost = averageCostFromCell(averageCostCell);
+
+      if (!symbol || !Number.isFinite(shares) || shares <= 0 || !Number.isFinite(averageCost)) {
+        continue;
+      }
+
+      const key = `${accountName}|${symbol}|${shares}|${averageCost}`;
+      if (seen.has(key)) {
+        continue;
+      }
+      seen.add(key);
+      positions.push({
+        accountName,
+        symbol,
+        shares,
+        averageCost
+      });
+    }
+
+    return positions;
   }
 
   function positionRowAncestor(anchor) {
@@ -706,6 +967,11 @@
   }
 
   function collectStockPositionsFromPage(accountName = currentAccountName()) {
+    const tablePositions = collectStockPositionsFromTable(accountName);
+    if (tablePositions.length > 0) {
+      return tablePositions;
+    }
+
     const positions = [];
     const seen = new Set();
 
@@ -748,47 +1014,108 @@
         }
 
         const label = elementLabel(element);
-        return /\b(?:account|individual|brokerage|ira|roth|traditional|margin|cash|retirement|investing)\b/i.test(label);
+        if (!label || label.length > 80 || /\b(?:buy|sell|search|notifications?|settings|help|rewards|crypto)\b/i.test(label)) {
+          return false;
+        }
+
+        return (
+          /\b(?:account|individual|brokerage|ira|roth|traditional|margin|cash|retirement|investing|personal|joint)\b/i.test(label) ||
+          element.matches?.("[aria-haspopup='menu'], [aria-haspopup='listbox']") ||
+          Boolean(element.querySelector?.("svg"))
+        );
       })
       .sort((a, b) => {
         const aLabel = elementLabel(a);
         const bLabel = elementLabel(b);
         const aAccount = /\baccount\b/i.test(aLabel) ? 0 : 1;
         const bAccount = /\baccount\b/i.test(bLabel) ? 0 : 1;
-        return aAccount - bAccount || aLabel.length - bLabel.length;
+        const aPopup = a.matches?.("[aria-haspopup='menu'], [aria-haspopup='listbox']") ? 0 : 1;
+        const bPopup = b.matches?.("[aria-haspopup='menu'], [aria-haspopup='listbox']") ? 0 : 1;
+        return aAccount - bAccount || aPopup - bPopup || aLabel.length - bLabel.length;
       });
   }
 
-  function accountOptionLabels() {
-    const labels = [];
-    const seen = new Set();
+  function accountChoiceLabel(element) {
+    const labelNodes = element.querySelectorAll ? [...element.querySelectorAll("p, span")] : [];
+    const preferred = labelNodes
+      .map((candidate) => normalizeText(candidate.innerText || candidate.textContent || ""))
+      .filter((label) =>
+        label &&
+        label.length <= 60 &&
+        !/^(?:selected account|account selected)$/i.test(label) &&
+        !/^\$?-?\d[\d,.]*%?$/.test(label)
+      )[0];
 
-    for (const element of [...document.querySelectorAll("button, [role='menuitem'], [role='option'], [role='button'], a, div")].filter(visible)) {
-      const label = elementLabel(element);
-      if (
-        !label ||
-        label.length > 80 ||
-        !/\b(?:individual|brokerage|ira|roth|traditional|margin|cash|retirement|account)\b/i.test(label) ||
-        /\b(?:add|open|settings|statement|transfer|support|help)\b/i.test(label)
-      ) {
+    return preferred || elementLabel(element);
+  }
+
+  function isNonAccountGroupText(text) {
+    return /^(?:stocks|name|symbol|shares|price|average cost|total return|equity|search|rewards|investing|crypto|portfolio overview|notifications|account|settings|help|history|transfers|recurring|stock lending|margin investing|reports and statements|tax center)$/i.test(
+      normalizeText(text)
+    );
+  }
+
+  function accountGroupHeadingFor(element) {
+    const rect = element.getBoundingClientRect();
+    const headings = visibleTextElements("div, span, p")
+      .filter(({ element: candidate, text, rect: candidateRect }) => {
+        if (
+          candidate.closest?.("button, a, [role='button'], [role='menuitem'], [role='option']") ||
+          text.length > 60 ||
+          isNonAccountGroupText(text) ||
+          candidateRect.bottom > rect.top + 6 ||
+          candidateRect.bottom < rect.top - 110 ||
+          Math.abs(candidateRect.left - rect.left) > 420
+        ) {
+          return false;
+        }
+
+        return true;
+      })
+      .sort((a, b) => b.rect.bottom - a.rect.bottom || a.rect.left - b.rect.left);
+
+    return headings[0]?.text || "";
+  }
+
+  function isNonAccountOptionText(text) {
+    return /^(?:add|open|settings|statement|statements|transfer|transfers|support|help|tax center|history|search|rewards|crypto|notifications?|stocks|name|symbol|shares|price|average cost|total return|equity)$/i.test(
+      normalizeText(text)
+    );
+  }
+
+  function accountOptionDescriptors() {
+    const descriptors = [];
+    const occurrenceCounts = new Map();
+
+    for (const element of [...document.querySelectorAll("button, [role='menuitem'], [role='option'], [role='button']")].filter(visible)) {
+      const label = accountChoiceLabel(element);
+      const group = accountGroupHeadingFor(element);
+      if (!label || !group || label.length > 80 || isNonAccountOptionText(label)) {
         continue;
       }
 
-      if (!seen.has(label)) {
-        seen.add(label);
-        labels.push(label);
-      }
+      const baseKey = `${group}|${label}`;
+      const occurrence = occurrenceCounts.get(baseKey) || 0;
+      occurrenceCounts.set(baseKey, occurrence + 1);
+      const displayName = label.toLowerCase() === group.toLowerCase()
+        ? label
+        : `${group} - ${label}`;
+      descriptors.push({
+        key: `${baseKey}|${occurrence}`,
+        group,
+        label,
+        displayName,
+        element
+      });
     }
 
-    return labels;
+    return descriptors;
   }
 
-  function clickAccountOption(label) {
-    const candidates = [...document.querySelectorAll("button, [role='menuitem'], [role='option'], [role='button'], a, div")]
-      .filter((element) => visible(element) && elementLabel(element) === label)
-      .sort((a, b) => candidateClickScore(a, label) - candidateClickScore(b, label));
-
-    const target = candidates[0];
+  function clickAccountOption(option) {
+    const target = accountOptionDescriptors()
+      .filter((candidate) => candidate.key === option.key || (candidate.group === option.group && candidate.label === option.label))
+      .sort((a, b) => candidateClickScore(a.element, a.label) - candidateClickScore(b.element, b.label))[0]?.element;
     if (!target) {
       return false;
     }
@@ -798,10 +1125,10 @@
   }
 
   async function openAccountDropdown() {
-    for (const candidate of accountDropdownCandidates().slice(0, 4)) {
+    for (const candidate of accountDropdownCandidates().slice(0, 8)) {
       clickLikeUser(candidate);
       await wait(400);
-      if (accountOptionLabels().length > 1) {
+      if (accountOptionDescriptors().length > 0) {
         return true;
       }
     }
@@ -809,8 +1136,71 @@
     return false;
   }
 
+  function stockScrollTargets() {
+    return [...document.querySelectorAll("main, [role='main'], [data-testid], section, div")]
+      .filter((element) => {
+        if (!visible(element)) {
+          return false;
+        }
+
+        return element.scrollHeight > element.clientHeight + 40;
+      })
+      .sort((a, b) => {
+        const aText = normalizeText(a.innerText || a.textContent || "");
+        const bText = normalizeText(b.innerText || b.textContent || "");
+        const aStocks = /\bstocks\b/i.test(aText) ? 0 : 1;
+        const bStocks = /\bstocks\b/i.test(bText) ? 0 : 1;
+        return aStocks - bStocks || b.clientHeight - a.clientHeight;
+      });
+  }
+
+  function resetStockPositionScroll() {
+    window.scrollTo(0, 0);
+    for (const target of stockScrollTargets().slice(0, 4)) {
+      target.scrollTop = 0;
+    }
+  }
+
+  async function scrollStockPositionsPage() {
+    for (const target of stockScrollTargets().slice(0, 4)) {
+      target.scrollTop += Math.max(260, target.clientHeight * 0.75);
+    }
+    window.scrollBy(0, Math.max(360, window.innerHeight * 0.75));
+    await wait(180);
+  }
+
+  async function collectStockPositionsForAccount(accountName) {
+    const positions = [];
+    const seen = new Set();
+    let stagnantRounds = 0;
+
+    resetStockPositionScroll();
+    await wait(120);
+
+    for (let round = 0; round < 28 && stagnantRounds < 5; round += 1) {
+      ensureAccountInvestingPage();
+      let added = 0;
+
+      for (const position of collectStockPositionsFromPage(accountName)) {
+        const key = `${position.accountName}|${position.symbol}|${position.shares}|${position.averageCost}`;
+        if (seen.has(key)) {
+          continue;
+        }
+        seen.add(key);
+        positions.push(position);
+        added += 1;
+      }
+
+      stagnantRounds = added > 0 ? 0 : stagnantRounds + 1;
+      await scrollStockPositionsPage();
+    }
+
+    return positions;
+  }
+
   async function extractStockPositions() {
     await waitForRobinhoodApp();
+    ensureAccountInvestingPage();
 
     if (!isLoggedIn()) {
       throw new Error("Log in to Robinhood in the opened Chrome tab, then return and refresh.");
@@ -829,19 +1219,34 @@
     };
 
     await wait(900);
-    collect();
 
     if (await openAccountDropdown()) {
-      const labels = accountOptionLabels();
-      for (const label of labels) {
-        if (!(await openAccountDropdown())) {
+      const accountOptions = accountOptionDescriptors();
+      for (const option of accountOptions) {
+        if (accountOptionDescriptors().length === 0 && !(await openAccountDropdown())) {
           break;
         }
-        if (!clickAccountOption(label)) {
+        if (!clickAccountOption(option)) {
           continue;
         }
         await wait(1200);
-        collect(label);
+        ensureAccountInvestingPage();
+        collect(option.displayName);
+        for (const position of await collectStockPositionsForAccount(option.displayName)) {
+          const key = `${position.accountName}|${position.symbol}|${position.shares}|${position.averageCost}`;
+          if (!seenRows.has(key)) {
+            seenRows.add(key);
+            positions.push(position);
+          }
+        }
+      }
+    } else {
+      for (const position of await collectStockPositionsForAccount(currentAccountName())) {
+        const key = `${position.accountName}|${position.symbol}|${position.shares}|${position.averageCost}`;
+        if (!seenRows.has(key)) {
+          seenRows.add(key);
+          positions.push(position);
+        }
       }
     }
 

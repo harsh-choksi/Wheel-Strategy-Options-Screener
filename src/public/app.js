@@ -23,6 +23,7 @@ const state = {
   minCspReturnPercent: 1,
   minCcReturnPercent: 2,
   hideUnavailable: false,
+  versionInfo: null,
   helper: {
     installed: false,
     version: null
@@ -42,6 +43,7 @@ const elements = {
   yearlyReturnInput: document.querySelector("#yearlyReturnInput"),
   runButton: document.querySelector("#runButton"),
   exportButton: document.querySelector("#exportButton"),
+  diagnosticsButton: document.querySelector("#diagnosticsButton"),
   notice: document.querySelector("#notice"),
   resultBody: document.querySelector("#resultBody"),
   eligibleMetricLabel: document.querySelector("#eligibleMetricLabel"),
@@ -75,7 +77,10 @@ const elements = {
   settingsDialogClose: document.querySelector("#settingsDialogClose"),
   exportSettingsButton: document.querySelector("#exportSettingsButton"),
   importSettingsButton: document.querySelector("#importSettingsButton"),
-  settingsImportInput: document.querySelector("#settingsImportInput")
+  settingsImportInput: document.querySelector("#settingsImportInput"),
+  appVersionLabel: document.querySelector("#appVersionLabel"),
+  helperVersionLabel: document.querySelector("#helperVersionLabel"),
+  deployedAtLabel: document.querySelector("#deployedAtLabel")
 };
 
 const moneyFormatter = new Intl.NumberFormat("en-US", {
@@ -131,7 +136,13 @@ let portfolioReallocationId = 0;
 let returnRecalculationTimer = null;
 let returnRecalculationId = 0;
 let syncingReturnInputs = false;
+const CARET_CONTROL_INPUT_IDS = new Set([
+  "portfolioInput",
+  "weeklyReturnInput",
+  "yearlyReturnInput"
+]);
 const ONBOARDING_SEEN_KEY = "wheel-screener-onboarding-v2";
+const LAST_STRATEGY_KEY = "wheel-screener-last-strategy-v1";
 const CC_POSITIONS_STORAGE_KEY = "wheel-screener-cc-positions-v1";
 const CSP_SCREENERS_STORAGE_KEY = "wheel-screener-csp-screeners-v2";
 const MANUAL_CSP_SYMBOLS_STORAGE_KEY = "wheel-screener-manual-csp-symbols-v1";
@@ -142,6 +153,68 @@ const STARTER_SCREENER_NAMES = {
   standard: "Wheel Strategy 2",
   mini: "Wheel Strategy 3"
 };
+
+function rememberLastStrategy(strategy = state.strategy) {
+  try {
+    window.localStorage.setItem(LAST_STRATEGY_KEY, strategy === "cc" ? "cc" : "csp");
+  } catch {
+    // Last strategy is only a navigation convenience.
+  }
+}
+
+function applyInitialStrategyFromUrl() {
+  const params = new URLSearchParams(window.location.search);
+  const strategy = params.get("strategy");
+  if (strategy === "cc" || strategy === "csp") {
+    state.strategy = strategy;
+    rememberLastStrategy(strategy);
+  }
+}
+
+function formatDeployTimestamp(value) {
+  if (!value || value === "local") {
+    return value || "Unknown";
+  }
+
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) {
+    return value;
+  }
+
+  return date.toLocaleString([], {
+    year: "numeric",
+    month: "short",
+    day: "numeric",
+    hour: "numeric",
+    minute: "2-digit"
+  });
+}
+
+function renderReleasePanel() {
+  if (elements.appVersionLabel) {
+    elements.appVersionLabel.textContent = state.versionInfo?.appVersion || "Unknown";
+  }
+
+  if (elements.helperVersionLabel) {
+    elements.helperVersionLabel.textContent =
+      state.helper.version || state.versionInfo?.helperVersion || "Not detected";
+  }
+
+  if (elements.deployedAtLabel) {
+    elements.deployedAtLabel.textContent = formatDeployTimestamp(state.versionInfo?.deployedAt);
+  }
+}
+
+async function loadVersionInfo() {
+  try {
+    state.versionInfo = await fetchJson("/api/version");
+  } catch {
+    state.versionInfo = null;
+  }
+
+  renderReleasePanel();
+}
+
 function rememberOnboardingDismissed() {
   try {
     window.localStorage.setItem(ONBOARDING_SEEN_KEY, "true");
@@ -540,6 +613,7 @@ function applyHelperDetected(helper) {
   };
 
   renderConnectionStatus();
+  renderReleasePanel();
   setMode("live");
 }
 
@@ -668,6 +742,7 @@ function renderStrategyControls() {
 
 function setStrategy(strategy) {
   state.strategy = strategy === "cc" ? "cc" : "csp";
+  rememberLastStrategy(state.strategy);
   setNotice("");
   renderStrategyControls();
 }
@@ -833,6 +908,17 @@ function updateRunButtonState() {
   elements.runButton.classList.toggle("run-refresh", isRefresh);
   elements.runButton.classList.toggle("run-scan", !isRefresh);
   elements.runButton.classList.remove("run-busy");
+  updateDiagnosticsButtonState();
+}
+
+function updateDiagnosticsButtonState() {
+  if (!elements.diagnosticsButton) {
+    return;
+  }
+
+  const hasResult = Boolean(activeResult());
+  elements.diagnosticsButton.hidden = !hasResult;
+  elements.diagnosticsButton.disabled = !hasResult;
 }
 
 function setRunButtonScanning() {
@@ -840,6 +926,7 @@ function setRunButtonScanning() {
   elements.runButton.textContent = "Scanning...";
   elements.runButton.classList.remove("run-scan", "run-refresh");
   elements.runButton.classList.add("run-busy");
+  updateDiagnosticsButtonState();
 }
 
 function blankManualCspSymbol() {
@@ -1402,11 +1489,10 @@ function renderCcRows(result) {
               class="cc-inline-input cc-average-cost-input"
               data-cc-field="averageCost"
               aria-label="Average Cost"
-              type="number"
-              min="0"
-              step="0.01"
+              type="text"
               value="${escapeHtml(position.averageCost)}"
               inputmode="decimal"
+              autocomplete="off"
               ${readonlyAttribute}
             />
           </td>
@@ -1422,11 +1508,10 @@ function renderCcRows(result) {
               class="cc-inline-input cc-contracts-input"
               data-cc-field="contracts"
               aria-label="Contracts"
-              type="number"
-              min="0"
-              step="1"
+              type="text"
               value="${escapeHtml(position.contracts)}"
               inputmode="numeric"
+              autocomplete="off"
               ${readonlyAttribute}
             />
           </td>
@@ -1455,6 +1540,7 @@ function renderRows() {
     elements.resultBody.innerHTML =
       '<tr class="empty-row"><td colspan="14" class="empty-cell">No scan has run yet.</td></tr>';
     elements.exportButton.disabled = true;
+    updateDiagnosticsButtonState();
     return;
   }
 
@@ -1485,6 +1571,7 @@ function renderSummary(result) {
           ? "Enter manual CSP symbols, then click Scan."
           : "Click Scan to populate the table.";
     updateRunButtonState();
+    updateDiagnosticsButtonState();
     return;
   }
 
@@ -1513,6 +1600,7 @@ function renderSummary(result) {
       ? `${result.source} source - ${result.symbols.length} covered-call rows scanned`
       : `${result.source} source - ${result.symbols.length} symbols scanned`;
   updateRunButtonState();
+  updateDiagnosticsButtonState();
 }
 
 function clearPortfolioReallocationTimer() {
@@ -1605,6 +1693,49 @@ function restoreActiveCcInput(activeInput) {
   }, 0);
 }
 
+function captureActiveControlInput() {
+  const active = document.activeElement;
+  if (
+    !(active instanceof HTMLInputElement) ||
+    !CARET_CONTROL_INPUT_IDS.has(active.id)
+  ) {
+    return null;
+  }
+
+  const selectionCapable = ["text", "search", "tel", "url", "password"].includes(active.type);
+  return {
+    id: active.id,
+    selectionStart: selectionCapable ? active.selectionStart : null,
+    selectionEnd: selectionCapable ? active.selectionEnd : null
+  };
+}
+
+function restoreActiveControlInput(activeInput) {
+  if (!activeInput) {
+    return;
+  }
+
+  window.setTimeout(() => {
+    const input = document.getElementById(activeInput.id);
+    if (!(input instanceof HTMLInputElement)) {
+      return;
+    }
+
+    const current = document.activeElement;
+    if (current && current !== document.body && current !== input) {
+      return;
+    }
+
+    input.focus();
+    if (
+      activeInput.selectionStart !== null &&
+      typeof input.setSelectionRange === "function"
+    ) {
+      input.setSelectionRange(activeInput.selectionStart, activeInput.selectionEnd);
+    }
+  }, 0);
+}
+
 async function finalizeFromCachedScan() {
   if (state.strategy === "cc") {
     await finalizeCoveredCallsFromCachedScan();
@@ -1637,9 +1768,11 @@ async function finalizeFromCachedScan() {
       return;
     }
 
+    const activeControlInput = captureActiveControlInput();
     state.lastResult = result;
     renderSummary(result);
     renderRows();
+    restoreActiveControlInput(activeControlInput);
     setNotice("");
   } catch (error) {
     if (requestId === returnRecalculationId) {
@@ -1656,6 +1789,7 @@ async function finalizeCoveredCallsFromCachedScan() {
 
   const requestId = ++returnRecalculationId;
   const activeCcInput = captureActiveCcInput();
+  const activeControlInput = captureActiveControlInput();
 
   try {
     const result = await fetchJson("/api/covered-calls/finalize", {
@@ -1675,10 +1809,12 @@ async function finalizeCoveredCallsFromCachedScan() {
       return;
     }
 
+    const latestCcInput = captureActiveCcInput() || activeCcInput;
     state.lastCcResult = result;
     renderSummary(result);
     renderRows();
-    restoreActiveCcInput(activeCcInput);
+    restoreActiveCcInput(latestCcInput);
+    restoreActiveControlInput(activeControlInput);
     setNotice("");
   } catch (error) {
     if (requestId === returnRecalculationId) {
@@ -1711,9 +1847,11 @@ async function reallocatePortfolio() {
       return;
     }
 
+    const activeControlInput = captureActiveControlInput();
     state.lastResult = result;
     renderSummary(result);
     renderRows();
+    restoreActiveControlInput(activeControlInput);
     setNotice("");
   } catch (error) {
     if (requestId === portfolioReallocationId) {
@@ -2182,6 +2320,111 @@ function exportCsv() {
   URL.revokeObjectURL(url);
 }
 
+function activeForecastResult() {
+  return state.strategy === "cc" ? state.lastCcForecastResult : state.lastForecastResult;
+}
+
+function activeOptionQuotesBySymbol() {
+  return state.strategy === "cc" ? state.lastCcOptionQuotesBySymbol : state.lastOptionQuotesBySymbol;
+}
+
+function activeOptionDiagnosticsBySymbol() {
+  return state.strategy === "cc"
+    ? state.lastCcOptionDiagnosticsBySymbol
+    : state.lastOptionDiagnosticsBySymbol;
+}
+
+function safeRowDiagnostic(row) {
+  return {
+    symbol: row.symbol,
+    status: rowStatus(row),
+    reason: row.reason || row.error || "",
+    currentPrice: row.currentPrice ?? null,
+    minTarget: row.minTarget ?? null,
+    averageTarget: row.averageTarget ?? null,
+    maxTarget: row.maxTarget ?? null,
+    cspStrike: row.cspStrike ?? null,
+    cspBid: row.cspBid ?? null,
+    cspReturnPercent: row.cspReturnPercent ?? null,
+    ccStrike: row.ccStrike ?? null,
+    ccBid: row.ccBid ?? null,
+    ccReturnPercent: row.ccReturnPercent ?? null,
+    contracts: row.contracts ?? null,
+    actualCollateralDollars: row.actualCollateralDollars ?? null,
+    totalReturnDollars: row.totalReturnDollars ?? null,
+    totalReturnPercent: row.totalReturnPercent ?? null
+  };
+}
+
+function safeDiagnosticsBySymbol(diagnosticsBySymbol) {
+  if (!diagnosticsBySymbol || typeof diagnosticsBySymbol !== "object") {
+    return {};
+  }
+
+  return Object.fromEntries(
+    Object.entries(diagnosticsBySymbol).map(([symbol, diagnostics]) => [
+      symbol,
+      {
+        status: diagnostics?.status || "",
+        source: diagnostics?.source || "",
+        error: diagnostics?.error ? String(diagnostics.error).slice(0, 300) : "",
+        errors: Array.isArray(diagnostics?.errors)
+          ? diagnostics.errors.map((error) => String(error).slice(0, 300))
+          : [],
+        warnings: Array.isArray(diagnostics?.warnings)
+          ? diagnostics.warnings.map((warning) => String(warning).slice(0, 300))
+          : []
+      }
+    ])
+  );
+}
+
+function buildDiagnosticsExport() {
+  const result = activeResult();
+  const forecastResult = activeForecastResult();
+  const optionQuotesBySymbol = activeOptionQuotesBySymbol() || {};
+  const optionDiagnosticsBySymbol = activeOptionDiagnosticsBySymbol() || {};
+
+  return {
+    app: "wheel-strategy-screener",
+    exportedAt: new Date().toISOString(),
+    appVersion: state.versionInfo?.appVersion || null,
+    helperVersion: state.helper.version || state.versionInfo?.helperVersion || null,
+    strategy: state.strategy,
+    strategyMode: state.strategy === "cc" ? state.ccInputMode : state.cspInputMode,
+    dataSource: state.mode,
+    source: result?.source || null,
+    rowCount: result?.rows?.length || 0,
+    symbols: result?.symbols || [],
+    optionRequestCount: Array.isArray(forecastResult?.optionRequests)
+      ? forecastResult.optionRequests.length
+      : 0,
+    optionQuoteSymbols: Object.keys(optionQuotesBySymbol),
+    rows: result?.rows?.map(safeRowDiagnostic) || [],
+    helperDiagnostics: safeDiagnosticsBySymbol(optionDiagnosticsBySymbol)
+  };
+}
+
+function exportDiagnostics() {
+  const result = activeResult();
+  if (!result) {
+    return;
+  }
+
+  const diagnostics = buildDiagnosticsExport();
+  const blob = new Blob([JSON.stringify(diagnostics, null, 2)], {
+    type: "application/json;charset=utf-8"
+  });
+  const url = URL.createObjectURL(blob);
+  const link = document.createElement("a");
+  link.href = url;
+  link.download = `wheel-screener-diagnostics-${state.strategy}-${new Date()
+    .toISOString()
+    .slice(0, 10)}.json`;
+  link.click();
+  URL.revokeObjectURL(url);
+}
+
 function buildSettingsExport() {
   commitReturnTargetFromInputs();
   ensureScreeners();
@@ -2636,6 +2879,7 @@ function bindCcList() {
 }
 
 async function init() {
+  applyInitialStrategyFromUrl();
   initOnboarding();
   loadCcPositionsFromStorage();
   loadManualCspSymbolsFromStorage();
@@ -2649,6 +2893,7 @@ async function init() {
   bindCcList();
   elements.runButton.addEventListener("click", runScan);
   elements.exportButton.addEventListener("click", exportCsv);
+  elements.diagnosticsButton?.addEventListener("click", exportDiagnostics);
   elements.connectButton.addEventListener("click", connectRobinhood);
   elements.portfolioInput.addEventListener("input", schedulePortfolioReallocation);
   elements.portfolioInput.addEventListener("change", schedulePortfolioReallocation);
@@ -2675,7 +2920,8 @@ async function init() {
 
   const [screeners] = await Promise.all([
     fetchJson("/api/screeners"),
-    refreshExtensionHelper({ silent: false })
+    refreshExtensionHelper({ silent: false }),
+    loadVersionInfo()
   ]);
 
   loadCspScreenersFromStorage(screeners.screeners);

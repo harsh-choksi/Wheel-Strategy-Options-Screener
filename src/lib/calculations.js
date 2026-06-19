@@ -9,6 +9,10 @@ function calculateAllocationPercentages(count) {
   return weights.map((weight) => (weight / totalWeight) * 100);
 }
 
+function collateralPerCspContract(row) {
+  return Number.isFinite(row.cspStrike) && row.cspStrike > 0 ? row.cspStrike * 100 : null;
+}
+
 function calculateContractAllocations(eligibleRows, portfolioValue) {
   if (!Number.isFinite(portfolioValue) || portfolioValue <= 0) {
     return eligibleRows.map(() => ({
@@ -19,8 +23,7 @@ function calculateContractAllocations(eligibleRows, portfolioValue) {
   }
 
   const baseAllocations = eligibleRows.map((row) => {
-    const collateralPerContract =
-      Number.isFinite(row.cspStrike) && row.cspStrike > 0 ? row.cspStrike * 100 : null;
+    const collateralPerContract = collateralPerCspContract(row);
 
     if (!collateralPerContract || !Number.isFinite(row.allocationDollars)) {
       return {
@@ -120,6 +123,41 @@ function calculateContractAllocations(eligibleRows, portfolioValue) {
   });
 }
 
+function calculateAffordableFallbackRows(candidateRows, portfolioValue) {
+  if (!Number.isFinite(portfolioValue) || portfolioValue <= 0) {
+    return [];
+  }
+
+  let remainingCash = portfolioValue;
+  const selectedRows = [];
+
+  for (const row of candidateRows) {
+    const collateralPerContract = collateralPerCspContract(row);
+    if (!collateralPerContract || collateralPerContract > remainingCash) {
+      continue;
+    }
+
+    selectedRows.push({
+      row,
+      collateralPerContract
+    });
+    remainingCash -= collateralPerContract;
+  }
+
+  const percentages = calculateAllocationPercentages(selectedRows.length);
+
+  return selectedRows.map(({ row, collateralPerContract }, index) => ({
+    ...row,
+    used: true,
+    rank: index + 1,
+    allocationPercent: percentages[index],
+    allocationDollars: (portfolioValue * percentages[index]) / 100,
+    contracts: 1,
+    collateralPerContract,
+    actualCollateralDollars: collateralPerContract
+  }));
+}
+
 function prepareAllocatedRows(candidateRows, portfolioValue) {
   const percentages = calculateAllocationPercentages(candidateRows.length);
 
@@ -163,7 +201,7 @@ function calculateUsedEligibleRows(eligibleRows, portfolioValue) {
     }
 
     if (usedRows.length === 0) {
-      return [];
+      return calculateAffordableFallbackRows(candidates, portfolioValue);
     }
 
     candidates = usedRows;

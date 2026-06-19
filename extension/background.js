@@ -106,6 +106,26 @@ async function openRobinhoodLogin() {
   });
 }
 
+async function helperStatus() {
+  const tab = await findRobinhoodTab();
+  const url = String(tab?.url || "");
+  let path = "";
+
+  try {
+    path = url ? new URL(url).pathname : "";
+  } catch {
+    path = "";
+  }
+
+  return {
+    installed: true,
+    version: chrome.runtime.getManifest().version,
+    hasRobinhoodTab: Boolean(tab),
+    robinhoodUrl: url || null,
+    onInvestingPage: path === "/account/investing" || path === "/account/investing/"
+  };
+}
+
 async function ensureRobinhoodTabForScan() {
   let tab = await findRobinhoodTab();
   if (!tab) {
@@ -329,6 +349,10 @@ chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
         installed: true,
         version: chrome.runtime.getManifest().version
       };
+    }
+
+    if (message?.action === "status") {
+      return helperStatus();
     }
 
     if (message?.action === "connect") {

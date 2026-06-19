@@ -1,0 +1,114 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Changelog - Wheel Strategy Screener</title>
+    <link rel="icon" href="/favicon.ico?v=0.2.8" sizes="any" />
+    <link rel="icon" href="/favicon-32.png?v=0.2.8" sizes="32x32" type="image/png" />
+    <link rel="apple-touch-icon" href="/apple-touch-icon.png?v=0.2.8" />
+    <link rel="stylesheet" href="/styles.css" />
+  </head>
+  <body class="simple-shell">
+    <header class="page-hero-band">
+      <div class="page-inner page-hero-inner">
+        <div class="title-block">
+          <p class="eyebrow">Release Notes</p>
+          <h1>Changelog</h1>
+          <p class="page-intro">
+            Track app and Chrome helper changes. Releases marked helper-breaking require
+            reloading the unpacked extension.
+          </p>
+        </div>
+        <div class="topbar-actions">
+          <a class="secondary-button" href="/helper.html">Install Helper</a>
+          <a class="secondary-button" href="/dashboard.html">Dashboard</a>
+        </div>
+      </div>
+    </header>
+
+    <main class="app-shell changelog-page">
+      <section class="guide-section" aria-labelledby="release-028">
+        <div class="guide-section-heading">
+          <p class="step-kicker">Helper-breaking</p>
+          <h2 id="release-028">0.2.8 - Private-Beta Completion</h2>
+          <p>
+            Reload the Chrome helper after deploying this release so Helper Health can report
+            extension status and the current Robinhood route.
+          </p>
+        </div>
+        <ul class="guide-list">
+          <li>Added the Command Center at <code>/</code> and moved the scanner dashboard to <code>/dashboard.html</code>.</li>
+          <li>Added safe <code>/healthz</code> and <code>/api/version</code> endpoints.</li>
+          <li>Added Settings release metadata, diagnostics export, Helper Health, and this changelog.</li>
+          <li>Documented release checklist, rollback notes, monitoring checks, and chatbot boundaries.</li>
+        </ul>
+      </section>
+
+      <section class="guide-section" aria-labelledby="release-027">
+        <div class="guide-section-heading">
+          <p class="step-kicker">Helper-breaking</p>
+          <h2 id="release-027">0.2.7 - Robinhood Position Import And Resend Contact</h2>
+          <p>
+            Reloading the helper was required because CC Auto gained Robinhood Investing page
+            position extraction.
+          </p>
+        </div>
+        <ul class="guide-list">
+          <li>Added CC Auto import from <code>https://robinhood.com/account/investing</code>.</li>
+          <li>Kept duplicate tickers across accounts while reusing option-chain reads by unique ticker.</li>
+          <li>Made Resend the only Contact Us email delivery provider.</li>
+          <li>Kept contact delivery Resend-only across code, docs, and tests.</li>
+        </ul>
+      </section>
+
+      <section class="guide-section" aria-labelledby="release-026">
+        <div class="guide-section-heading">
+          <p class="step-kicker">App Update</p>
+          <h2 id="release-026">0.2.6 - CSP And CC Source Modes</h2>
+        </div>
+        <ul class="guide-list">
+          <li>Added Manual and Auto source modes for CSP and CC workflows.</li>
+          <li>Added local smoke testing for primary public routes.</li>
+          <li>Removed public contact email visibility.</li>
+        </ul>
+      </section>
+    </main>
+
+    <footer class="site-footer" aria-label="Footer navigation">
+      <div class="page-inner footer-inner">
+        <div class="footer-brand">
+          <p class="eyebrow">Wheel Strategy Screener</p>
+          <h2>End-of-week options workflow</h2>
+          <p>
+            Screen cash-secured puts, review covered calls, and keep Robinhood
+            credentials local to Chrome.
+          </p>
+        </div>
+        <nav class="footer-columns" aria-label="Footer links">
+          <div class="footer-column">
+            <h3>Product</h3>
+            <a href="/home.html">Home</a>
+            <a href="/dashboard.html">Dashboard</a>
+            <a href="/guide.html">Setup Guide</a>
+            <a href="/helper.html">Install Helper</a>
+            <a href="/helper-health.html">Helper Health</a>
+          </div>
+          <div class="footer-column">
+            <h3>Resources</h3>
+            <a href="/learn.html">Learn</a>
+            <a href="/faq.html">FAQ</a>
+            <a href="/calculator.html">Calculator</a>
+            <a href="/changelog.html">Changelog</a>
+          </div>
+          <div class="footer-column">
+            <h3>Company</h3>
+            <a href="/contact.html">Contact Us</a>
+            <a href="/privacy.html">Privacy Policy</a>
+            <a href="/terms.html">Terms of Service</a>
+          </div>
+        </nav>
+      </div>
+    </footer>
+  </body>
+</html>

@@ -7,7 +7,7 @@
       name="description"
       content="Command Center for the Wheel Strategy Screener cash-secured put and covered-call dashboard."
     />
-    <title>Wheel Strategy Screener</title>
+    <title>Home - Wheel Strategy Screener</title>
     <link rel="icon" href="/favicon.ico?v=0.2.8" sizes="any" />
     <link rel="icon" href="/favicon-32.png?v=0.2.8" sizes="32x32" type="image/png" />
     <link rel="icon" href="/favicon-16.png?v=0.2.8" sizes="16x16" type="image/png" />
@@ -35,20 +35,6 @@
 
     <script>
       const LAST_STRATEGY_KEY = "wheel-screener-last-strategy-v1";
-      const params = new URLSearchParams(window.location.search);
-      const explicitHome =
-        window.location.pathname === "/home.html" || params.get("home") === "1";
-
-      if (!explicitHome) {
-        try {
-          const lastStrategy = window.localStorage.getItem(LAST_STRATEGY_KEY);
-          if (lastStrategy === "csp" || lastStrategy === "cc") {
-            window.location.replace(`/dashboard.html?strategy=${lastStrategy}`);
-          }
-        } catch {
-          // The Command Center remains usable when browser storage is unavailable.
-        }
-      }
 
       for (const link of document.querySelectorAll("[data-home-strategy]")) {
         link.addEventListener("click", () => {

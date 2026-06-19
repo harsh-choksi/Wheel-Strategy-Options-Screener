@@ -16,10 +16,14 @@ const {
 const { sendJson } = require("./lib/httpUtils");
 const { createRateLimiter } = require("./lib/rateLimit");
 const { buildZipFromDirectory } = require("./lib/zip");
+const packageMetadata = require("../package.json");
+const helperManifest = require("../extension/manifest.json");
 
 const PUBLIC_DIR = path.join(__dirname, "public");
 const EXTENSION_DIR = path.resolve(__dirname, "..", "extension");
-const CONTACT_TO_EMAIL = process.env.CONTACT_TO_EMAIL;
+const APP_VERSION = packageMetadata.version || "0.0.0";
+const HELPER_VERSION = helperManifest.version || "0.0.0";
+const STARTED_AT = new Date().toISOString();
 
 const MIME_TYPES = {
   ".html": "text/html; charset=utf-8",
@@ -30,6 +34,26 @@ const MIME_TYPES = {
   ".png": "image/png",
   ".svg": "image/svg+xml"
 };
+
+function publicVersionPayload() {
+  return {
+    app: "wheel-strategy-screener",
+    appVersion: APP_VERSION,
+    helperVersion: HELPER_VERSION,
+    deployedAt: process.env.DEPLOYED_AT || process.env.RELEASE_DEPLOYED_AT || "local",
+    nodeEnv: process.env.NODE_ENV || "development"
+  };
+}
+
+function healthPayload() {
+  return {
+    ok: true,
+    ...publicVersionPayload(),
+    uptimeSeconds: Math.round(process.uptime()),
+    startedAt: STARTED_AT,
+    timestamp: new Date().toISOString()
+  };
+}
 
 function sendStatic(req, res) {
   const requestUrl = new URL(req.url, "http://localhost");
@@ -108,18 +132,29 @@ function normalizeExplicitSymbols(symbols) {
 }
 
 function cleanContactText(value, maxLength) {
+  const cleaned = String(value || "")
+    .replace(/\s+/g, " ")
+    .trim();
+
+  if (!Number.isFinite(maxLength)) {
+    return cleaned;
+  }
+
+  return cleaned.slice(0, maxLength);
+}
+
+function cleanContactEmail(value) {
   return String(value || "")
     .replace(/\s+/g, " ")
     .trim()
-    .slice(0, maxLength);
+    .slice(0, 254);
 }
 
 function cleanContactMessage(value) {
   return String(value || "")
     .replace(/\r\n/g, "\n")
     .replace(/\r/g, "\n")
-    .trim()
-    .slice(0, 5000);
+    .trim();
 }
 
 function isValidEmail(value) {
@@ -131,9 +166,9 @@ function contactValidationError(body) {
     return "Message could not be accepted.";
   }
 
-  const name = cleanContactText(body.name, 100);
-  const email = cleanContactText(body.email, 254);
-  const subject = cleanContactText(body.subject, 160);
+  const name = cleanContactText(body.name);
+  const email = cleanContactEmail(body.email);
+  const subject = cleanContactText(body.subject);
   const message = cleanContactMessage(body.message);
 
   if (!name) {
@@ -148,70 +183,140 @@ function contactValidationError(body) {
     return "Subject is required.";
   }
 
-  if (message.length < 10) {
-    return "Message must be at least 10 characters.";
+  if (!message) {
+    return "Message is required.";
   }
 
   return null;
 }
 
+function contactSendErrorPayload(error) {
+  const code = String(error?.code || "");
+  const responseCode = Number.parseInt(error?.responseCode, 10);
+  const message = String(error?.message || "");
+
+  if (code === "CONTACT_EMAIL_NOT_CONFIGURED") {
+    return {
+      status: 503,
+      body: {
+        code: "CONTACT_EMAIL_NOT_CONFIGURED",
+        error: message
+      }
+    };
+  }
+
+  if (code === "CONTACT_EMAIL_AUTH_FAILED" || responseCode === 401 || responseCode === 403) {
+    return {
+      status: 502,
+      body: {
+        code: "CONTACT_EMAIL_AUTH_FAILED",
+        error: "Resend rejected the API key. Check RESEND_API_KEY, restart the server, and try again."
+      }
+    };
+  }
+
+  if (code === "CONTACT_EMAIL_CONNECTION_FAILED") {
+    return {
+      status: 502,
+      body: {
+        code: "CONTACT_EMAIL_CONNECTION_FAILED",
+        error: "The server could not reach Resend over HTTPS. Check VPS network/DNS access and server logs."
+      }
+    };
+  }
+
+  if (code === "CONTACT_EMAIL_SEND_FAILED") {
+    return {
+      status: 502,
+      body: {
+        code: "CONTACT_EMAIL_SEND_FAILED",
+        error:
+          "Resend could not send the message. Confirm CONTACT_FROM_EMAIL is a verified sender/domain and check server logs."
+      }
+    };
+  }
+
+  return {
+    status: 500,
+    body: {
+      code: "CONTACT_EMAIL_SEND_FAILED",
+      error: "Message could not be sent. Check the server contact email logs."
+    }
+  };
+}
+
 function contactPayload(body) {
   return {
-    name: cleanContactText(body.name, 100),
-    email: cleanContactText(body.email, 254),
-    subject: cleanContactText(body.subject, 160),
+    name: cleanContactText(body.name),
+    email: cleanContactEmail(body.email),
+    subject: cleanContactText(body.subject),
     message: cleanContactMessage(body.message)
   };
 }
 
+function contactToEmail() {
+  return process.env.CONTACT_TO_EMAIL;
+}
+
+function contactEmailText(payload) {
+  return [
+    "New Wheel Strategy Screener contact form message",
+    "",
+    `Name: ${payload.name}`,
+    `Reply email: ${payload.email}`,
+    `Subject: ${payload.subject}`,
+    "",
+    payload.message
+  ].join("\n");
+}
+
 async function defaultContactMailer(payload) {
-  const host = process.env.SMTP_HOST;
-  const port = Number.parseInt(process.env.SMTP_PORT || "587", 10);
-  const user = process.env.SMTP_USER;
-  const pass = process.env.SMTP_PASS;
-  const secure = String(process.env.SMTP_SECURE || "false").toLowerCase() === "true";
-  const from = process.env.CONTACT_FROM_EMAIL || user;
+  const apiKey = process.env.RESEND_API_KEY;
+  const from = process.env.CONTACT_FROM_EMAIL;
+  const to = contactToEmail();
 
-  if (!host || !Number.isFinite(port) || !user || !pass || !from || !CONTACT_TO_EMAIL) {
-    const error = new Error("Contact email is not configured.");
+  if (!apiKey || !from || !to) {
+    const error = new Error(
+      "Contact email is not configured. Set CONTACT_TO_EMAIL, CONTACT_FROM_EMAIL, and RESEND_API_KEY."
+    );
     error.code = "CONTACT_EMAIL_NOT_CONFIGURED";
     throw error;
   }
 
-  let nodemailer;
+  let response;
   try {
-    nodemailer = require("nodemailer");
-  } catch {
-    const error = new Error("Email dependency is not installed. Run npm install.");
-    error.code = "CONTACT_EMAIL_NOT_CONFIGURED";
+    response = await fetch("https://api.resend.com/emails", {
+      method: "POST",
+      headers: {
+        authorization: `Bearer ${apiKey}`,
+        "content-type": "application/json"
+      },
+      body: JSON.stringify({
+        from,
+        to: [to],
+        reply_to: payload.email,
+        subject: `[Wheel Strategy Screener] ${payload.subject}`,
+        text: contactEmailText(payload)
+      })
+    });
+  } catch (cause) {
+    const error = new Error("Resend request failed.");
+    error.code = "CONTACT_EMAIL_CONNECTION_FAILED";
+    error.cause = cause;
     throw error;
   }
 
-  const transporter = nodemailer.createTransport({
-    host,
-    port,
-    secure,
-    auth: {
-      user,
-      pass
-    }
-  });
-
-  await transporter.sendMail({
-    to: CONTACT_TO_EMAIL,
-    from,
-    replyTo: payload.email,
-    subject: `[Wheel Strategy Screener] ${payload.subject}`,
-    text: [
-      "New Wheel Strategy Screener contact form message",
-      "",
-      `Name: ${payload.name}`,
-      `Reply email: ${payload.email}`,
-      `Subject: ${payload.subject}`,
-      "",
-      payload.message
-    ].join("\n")
-  });
+  if (!response.ok) {
+    const responseBody = await response.text().catch(() => "");
+    const error = new Error(`Resend returned HTTP ${response.status}.`);
+    error.code =
+      response.status === 401 || response.status === 403
+        ? "CONTACT_EMAIL_AUTH_FAILED"
+        : "CONTACT_EMAIL_SEND_FAILED";
+    error.responseCode = response.status;
+    error.responseBody = responseBody.slice(0, 500);
+    throw error;
+  }
 }
 
 function parseMinCspReturnDecimal(body) {
@@ -234,6 +339,11 @@ function createAppServer({ forecastFetcher, currentPriceFetcher, contactMailer }
 
   async function handleApi(req, res) {
     const requestUrl = new URL(req.url, "http://localhost");
+
+    if (req.method === "GET" && requestUrl.pathname === "/api/version") {
+      sendJson(res, 200, publicVersionPayload());
+      return;
+    }
 
     if (req.method === "GET" && requestUrl.pathname === "/api/screeners") {
       sendJson(res, 200, {
@@ -276,14 +386,6 @@ function createAppServer({ forecastFetcher, currentPriceFetcher, contactMailer }
           error: `No stock symbols were found in "${body.screenerName || screener.name}".`
         });
         return;
-      }
-
-      if (mode === "live" && symbols && symbols.length === 0) {
-        const screener = getScreenerById(body.screenerId);
-          sendJson(res, 422, {
-            error: `No stock symbols were found in "${screener.name}".`
-          });
-          return;
       }
 
       const result = await analyzeScreener({
@@ -464,13 +566,17 @@ function createAppServer({ forecastFetcher, currentPriceFetcher, contactMailer }
           ok: true
         });
       } catch (error) {
-        const status = error.code === "CONTACT_EMAIL_NOT_CONFIGURED" ? 503 : 500;
-        sendJson(res, status, {
-          error:
-            status === 503
-              ? error.message
-              : "Message could not be sent. Try again later."
+        console.error("Contact email send failed", {
+          code: error.code,
+          command: error.command,
+          responseCode: error.responseCode,
+          message: error.message,
+          responseBody: error.responseBody,
+          causeCode: error.cause?.code,
+          causeMessage: error.cause?.message
         });
+        const failure = contactSendErrorPayload(error);
+        sendJson(res, failure.status, failure.body);
       }
       return;
     }
@@ -481,6 +587,11 @@ function createAppServer({ forecastFetcher, currentPriceFetcher, contactMailer }
   }
 
   const server = http.createServer((req, res) => {
+    if (req.method === "GET" && new URL(req.url, "http://localhost").pathname === "/healthz") {
+      sendJson(res, 200, healthPayload());
+      return;
+    }
+
     if (req.url.startsWith("/api/")) {
       handleApi(req, res).catch((error) => {
         sendJson(res, 500, {

@@ -40,6 +40,20 @@ function formatReturnRulePercent(minReturnDecimal) {
   return Number.isInteger(percent) ? String(percent) : Number.parseFloat(percent.toFixed(4)).toString();
 }
 
+function compareLowestStrike(a, b) {
+  return a.strike - b.strike || b.bid - a.bid || b.returnDecimal - a.returnDecimal;
+}
+
+function compareHighestStrike(a, b) {
+  return b.strike - a.strike || b.bid - a.bid || b.returnDecimal - a.returnDecimal;
+}
+
+function selectHighestStrikeWithBid(candidates, bid) {
+  return candidates
+    .filter((quote) => quote.bid === bid)
+    .sort(compareHighestStrike)[0] || null;
+}
+
 function selectCspQuote(currentPrice, quotes, minReturnDecimal = MIN_CSP_RETURN_DECIMAL) {
   const current = toFiniteNumber(currentPrice);
   const minimumReturn = normalizeMinReturnDecimal(minReturnDecimal);
@@ -54,7 +68,7 @@ function selectCspQuote(currentPrice, quotes, minReturnDecimal = MIN_CSP_RETURN_
       returnDecimal: quote.bid / quote.strike
     }))
     .filter((quote) => quote.returnDecimal >= minimumReturn)
-    .sort((a, b) => a.strike - b.strike || b.returnDecimal - a.returnDecimal);
+    .sort(compareLowestStrike);
 
   const selected = candidates[0];
   if (!selected) {
@@ -96,16 +110,19 @@ function selectCoveredCallQuote({
       usedFallback: false
     }))
     .filter((quote) => quote.returnDecimal >= minimumReturn)
-    .sort((a, b) => b.strike - a.strike || b.returnDecimal - a.returnDecimal);
+    .sort(compareHighestStrike);
 
-  const aboveCostFallback = normalizedQuotes
+  const aboveCostFallbackCandidates = normalizedQuotes
     .filter((quote) => quote.strike > cost)
     .map((quote) => ({
       ...quote,
       returnDecimal: quote.bid / returnBase,
       usedFallback: true
     }))
-    .sort((a, b) => a.strike - b.strike || b.returnDecimal - a.returnDecimal);
+    .sort(compareLowestStrike);
+  const aboveCostFallback = aboveCostFallbackCandidates[0]
+    ? selectHighestStrikeWithBid(aboveCostFallbackCandidates, aboveCostFallbackCandidates[0].bid)
+    : null;
 
   const belowCostFallback = normalizedQuotes
     .filter((quote) => quote.strike < cost)
@@ -114,10 +131,10 @@ function selectCoveredCallQuote({
       returnDecimal: quote.bid / returnBase,
       usedFallback: true
     }))
-    .sort((a, b) => b.strike - a.strike || b.returnDecimal - a.returnDecimal);
+    .sort(compareHighestStrike);
 
   const selected =
-    primaryCandidates[0] || aboveCostFallback[0] || belowCostFallback[0];
+    primaryCandidates[0] || aboveCostFallback || belowCostFallback[0];
 
   if (!selected) {
     return null;

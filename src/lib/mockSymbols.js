@@ -1,6 +1,6 @@
 const MOCK_SYMBOLS = {
-  safe: ["ONDS", "MARA","RGTI", "CLSK", "RIOT"],
-  standard: ["ONDS", "MARA","RGTI", "CLSK", "RIOT", "TMC", "RR"],
+  safe: ["ONDS", "MARA", "RGTI", "CLSK", "RIOT"],
+  standard: ["ONDS", "MARA", "RGTI", "CLSK", "RIOT", "TMC", "RR"],
   mini: ["ONDS", "TMC", "RR"]
 };
 

@@ -73,6 +73,23 @@ test("selects CSP quotes using a supplied weekly return threshold", () => {
   });
 });
 
+test("CSP same-premium qualifying puts select the lowest strike", () => {
+  const selected = selectCspQuote(
+    15,
+    [
+      { strike: 14, bid: 0.01 },
+      { strike: 13.5, bid: 0.01 },
+      { strike: 13, bid: 0.01 },
+      { strike: 12.5, bid: 0.01 }
+    ],
+    0
+  );
+
+  assert.equal(selected.cspStrike, 12.5);
+  assert.equal(selected.cspBid, 0.01);
+  assert.equal(selected.cspReturnPercent, (0.01 / 12.5) * 100);
+});
+
 test("covered call selection uses max current and average cost as return base", () => {
   const selected = selectCoveredCallQuote({
     currentPrice: 15,
@@ -89,6 +106,23 @@ test("covered call selection uses max current and average cost as return base", 
   assert.equal(selected.ccStrike, 18);
   assert.equal(selected.ccBid, 0.4);
   assert.equal(selected.ccReturnPercent, (0.4 / 15) * 100);
+});
+
+test("covered call primary same-premium calls select the highest strike", () => {
+  const selected = selectCoveredCallQuote({
+    currentPrice: 10,
+    averageCost: 8,
+    minReturnDecimal: 0.01,
+    quotes: [
+      { strike: 11, bid: 0.2 },
+      { strike: 12, bid: 0.2 },
+      { strike: 13, bid: 0.2 }
+    ]
+  });
+
+  assert.equal(selected.ccStrike, 13);
+  assert.equal(selected.ccBid, 0.2);
+  assert.equal(selected.ccUsedFallback, false);
 });
 
 test("covered call selection rejects primary strikes at or below return base", () => {
@@ -108,7 +142,25 @@ test("covered call selection rejects primary strikes at or below return base", (
   assert.equal(selected.ccReturnPercent, (0.28 / 12) * 100);
 });
 
-test("covered call selection falls back to nearest positive bid above average cost", () => {
+test("covered call selection still falls back to nearest positive bid above average cost when premiums differ", () => {
+  const selected = selectCoveredCallQuote({
+    currentPrice: 20,
+    averageCost: 12,
+    minReturnDecimal: 0.05,
+    quotes: [
+      { strike: 12, bid: 1 },
+      { strike: 14, bid: 0.01 },
+      { strike: 18, bid: 0.02 },
+      { strike: 19, bid: 0.03 }
+    ]
+  });
+
+  assert.equal(selected.ccStrike, 14);
+  assert.equal(selected.ccBid, 0.01);
+  assert.equal(selected.ccUsedFallback, true);
+});
+
+test("covered call above-cost fallback same-premium calls select the highest strike", () => {
   const selected = selectCoveredCallQuote({
     currentPrice: 20,
     averageCost: 12,
@@ -121,7 +173,7 @@ test("covered call selection falls back to nearest positive bid above average co
     ]
   });
 
-  assert.equal(selected.ccStrike, 14);
+  assert.equal(selected.ccStrike, 19);
   assert.equal(selected.ccBid, 0.01);
   assert.equal(selected.ccUsedFallback, true);
 });
@@ -572,5 +624,58 @@ test("removes zero-contract rows and recalculates allocation using only used row
   assert.equal(
     usedRows.reduce((sum, row) => sum + row.actualCollateralDollars, 0),
     10000
+  );
+});
+
+test("small CSP portfolio allocates one affordable contract when weighted sizing rounds to zero", () => {
+  const rows = applyAllocations(
+    [
+      { symbol: "ONDS", eligible: true, cspStrike: 9, cspBid: 0.1, cspReturnPercent: 1.11 },
+      { symbol: "ACHR", eligible: true, cspStrike: 5.5, cspBid: 0.13, cspReturnPercent: 2.36 },
+      { symbol: "POET", eligible: true, cspStrike: 11.5, cspBid: 0.1, cspReturnPercent: 0.87 },
+      { symbol: "FIG", eligible: true, cspStrike: 17.5, cspBid: 0.15, cspReturnPercent: 0.86 },
+      { symbol: "USAR", eligible: true, cspStrike: 21, cspBid: 0.2, cspReturnPercent: 0.95 }
+    ],
+    1000
+  );
+
+  assert.equal(rows[0].used, true);
+  assert.equal(rows[0].rank, 1);
+  assert.equal(rows[0].contracts, 1);
+  assert.equal(rows[0].actualCollateralDollars, 900);
+  assert.equal(rows[1].used, false);
+  assert.equal(rows[1].contracts, 0);
+  assert.equal(
+    rows.reduce((sum, row) => sum + (row.actualCollateralDollars || 0), 0),
+    900
+  );
+});
+
+test("small CSP fallback fills affordable rows in scan order without exceeding cash", () => {
+  const rows = applyAllocations(
+    [
+      { symbol: "TOO_HIGH", eligible: true, cspStrike: 15, cspBid: 0.2 },
+      { symbol: "FIRST", eligible: true, cspStrike: 6, cspBid: 0.2 },
+      { symbol: "SECOND", eligible: true, cspStrike: 3.7, cspBid: 0.2 },
+      { symbol: "NO_ROOM", eligible: true, cspStrike: 2.5, cspBid: 0.2 }
+    ],
+    1000
+  );
+
+  assert.deepEqual(
+    rows.filter((row) => row.used).map((row) => row.symbol),
+    ["FIRST", "SECOND"]
+  );
+  assert.deepEqual(
+    rows.filter((row) => row.used).map((row) => row.contracts),
+    [1, 1]
+  );
+  assert.deepEqual(
+    rows.map((row) => row.rank),
+    [null, 1, 2, null]
+  );
+  assert.equal(
+    rows.reduce((sum, row) => sum + (row.actualCollateralDollars || 0), 0),
+    970
   );
 });
