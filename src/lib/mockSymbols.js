@@ -1,7 +1,7 @@
 const MOCK_SYMBOLS = {
-  safe: ["ONDS", "MARA", "RGTI", "CLSK", "RIOT"],
-  standard: ["ONDS", "MARA", "RGTI", "CLSK", "RIOT", "TMC", "RR"],
-  mini: ["ONDS", "TMC", "RR"]
+  safe: ["AAA", "BBB", "CCC", "DDD", "EEE"],
+  standard: ["AAA", "BBB", "CCC", "DDD", "EEE", "FFF", "GGG"],
+  mini: ["AAA", "FFF", "GGG"]
 };
 
 function getMockSymbols(screenerId) {

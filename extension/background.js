@@ -27,6 +27,18 @@ function getTab(tabId) {
   return callbackApi((done) => chrome.tabs.get(tabId, done));
 }
 
+async function focusTab(tab) {
+  if (!tab?.id) {
+    return tab;
+  }
+
+  const focused = await updateTab(tab.id, { active: true });
+  if (tab.windowId) {
+    await callbackApi((done) => chrome.windows.update(tab.windowId, { focused: true }, done));
+  }
+  return focused || tab;
+}
+
 function sendTabMessage(tabId, message) {
   return callbackApi((done) => chrome.tabs.sendMessage(tabId, message, done));
 }
@@ -59,6 +71,16 @@ function waitForTabComplete(tabId, timeoutMs = 30000) {
     }
 
     chrome.tabs.onUpdated.addListener(listener);
+
+    getTab(tabId)
+      .then((tab) => {
+        if (tab?.status === "complete") {
+          clearTimeout(timeout);
+          chrome.tabs.onUpdated.removeListener(listener);
+          resolve();
+        }
+      })
+      .catch(() => {});
   });
 }
 
@@ -93,11 +115,7 @@ async function findRobinhoodTab() {
 async function openRobinhoodLogin() {
   const existing = await findRobinhoodTab();
   if (existing) {
-    await updateTab(existing.id, { active: true });
-    if (existing.windowId) {
-      await callbackApi((done) => chrome.windows.update(existing.windowId, { focused: true }, done));
-    }
-    return existing;
+    return focusTab(existing);
   }
 
   return createTab({
@@ -126,31 +144,76 @@ async function helperStatus() {
   };
 }
 
-async function ensureRobinhoodTabForScan() {
+function robinhoodPath(url) {
+  try {
+    return new URL(String(url || "")).pathname.replace(/\/+$/, "") || "/";
+  } catch {
+    return "";
+  }
+}
+
+function isRobinhoodScreenerUrl(url) {
+  return /^\/screener\/[^/]+/i.test(robinhoodPath(url));
+}
+
+function isRobinhoodHomeUrl(url) {
+  return robinhoodPath(url) === "/";
+}
+
+async function navigateFocusedRobinhoodTab(tab, url) {
+  await focusTab(tab);
+  const updated = await updateTab(tab.id, { active: true, url });
+  await focusTab(updated || tab);
+  await waitForTabComplete(tab.id).catch(() => {});
+  return getTab(tab.id).catch(() => updated || tab);
+}
+
+async function prepareRobinhoodScan(payload = {}) {
+  const strategy = payload?.strategy === "cc" ? "cc" : "csp";
+  const inputMode = payload?.inputMode === "auto" ? "auto" : "manual";
   let tab = await findRobinhoodTab();
+
   if (!tab) {
+    const url = strategy === "cc" && inputMode === "auto"
+      ? "https://robinhood.com/account/investing"
+      : "https://robinhood.com/";
     tab = await createTab({
-      url: "https://robinhood.com/",
+      url,
       active: true
     });
+    await focusTab(tab);
     await waitForTabComplete(tab.id).catch(() => {});
-    return tab;
-  }
-
-  if (!/^https:\/\/([^/]+\.)?robinhood\.com\//i.test(tab.url || "")) {
-    await updateTab(tab.id, { url: "https://robinhood.com/" });
-    await waitForTabComplete(tab.id).catch(() => {});
-    tab = (await queryTabs({ active: false })).find((candidate) => candidate.id === tab.id) || tab;
+    tab = await getTab(tab.id).catch(() => tab);
+  } else {
+    await focusTab(tab);
   }
 
   if (/\/login\b|\/signup\b/i.test(tab.url || "")) {
-    await updateTab(tab.id, { active: true });
     throw new Error("Log in to Robinhood in the opened Chrome tab, then return and refresh.");
   }
 
-  await updateTab(tab.id, { url: "https://robinhood.com/" });
-  await waitForTabComplete(tab.id).catch(() => {});
-  return tab;
+  if (inputMode === "auto" && strategy === "cc" && robinhoodPath(tab.url) !== "/account/investing") {
+    tab = await navigateFocusedRobinhoodTab(tab, "https://robinhood.com/account/investing");
+  } else if (
+    inputMode === "auto" &&
+    strategy === "csp" &&
+    !isRobinhoodHomeUrl(tab.url) &&
+    !isRobinhoodScreenerUrl(tab.url)
+  ) {
+    tab = await navigateFocusedRobinhoodTab(tab, "https://robinhood.com/");
+  }
+
+  await focusTab(tab);
+  return {
+    ok: true,
+    tabId: tab.id,
+    url: String(tab.url || "")
+  };
+}
+
+async function ensureRobinhoodTabForScan() {
+  const prepared = await prepareRobinhoodScan({ strategy: "csp", inputMode: "auto" });
+  return getTab(prepared.tabId);
 }
 
 async function ensureRobinhoodTabForOptions() {
@@ -165,7 +228,7 @@ async function ensureRobinhoodTabForOptions() {
   }
 
   if (/\/login\b|\/signup\b/i.test(tab.url || "")) {
-    await updateTab(tab.id, { active: true });
+    await focusTab(tab);
     throw new Error("Log in to Robinhood in the opened Chrome tab, then return and refresh.");
   }
 
@@ -173,27 +236,8 @@ async function ensureRobinhoodTabForOptions() {
 }
 
 async function ensureRobinhoodTabForPositions() {
-  let tab = await findRobinhoodTab();
-  if (!tab) {
-    tab = await createTab({
-      url: "https://robinhood.com/account/investing",
-      active: true
-    });
-    await waitForTabComplete(tab.id).catch(() => {});
-    return tab;
-  }
-
-  if (/\/login\b|\/signup\b/i.test(tab.url || "")) {
-    await updateTab(tab.id, { active: true });
-    throw new Error("Log in to Robinhood in the opened Chrome tab, then return and refresh.");
-  }
-
-  await updateTab(tab.id, {
-    active: true,
-    url: "https://robinhood.com/account/investing"
-  });
-  await waitForTabComplete(tab.id).catch(() => {});
-  return tab;
+  const prepared = await prepareRobinhoodScan({ strategy: "cc", inputMode: "auto" });
+  return getTab(prepared.tabId);
 }
 
 async function sendRobinhoodMessage(tabId, message) {
@@ -211,14 +255,26 @@ async function extractScreener(payload) {
     throw new Error("Choose a saved Robinhood screener before scanning.");
   }
 
-  const tab = await ensureRobinhoodTabForScan();
-  const result = await sendRobinhoodMessage(tab.id, {
+  let tab = await ensureRobinhoodTabForScan();
+  let result = await sendRobinhoodMessage(tab.id, {
     action: "extractScreener",
     screenerName
   });
 
+  if (result?.retryFromHome) {
+    tab = await navigateFocusedRobinhoodTab(tab, "https://robinhood.com/");
+    result = await sendRobinhoodMessage(tab.id, {
+      action: "extractScreener",
+      screenerName
+    });
+  }
+
   if (result?.error) {
     throw new Error(result.error);
+  }
+
+  if (result?.retryFromHome) {
+    throw new Error(`Could not open Robinhood screener named "${screenerName}".`);
   }
 
   return result;
@@ -360,6 +416,10 @@ chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
       return {
         ok: true
       };
+    }
+
+    if (message?.action === "prepareRobinhoodScan") {
+      return prepareRobinhoodScan(message.payload || {});
     }
 
     if (message?.action === "extractScreener") {

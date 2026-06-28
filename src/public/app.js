@@ -43,7 +43,6 @@ const elements = {
   yearlyReturnInput: document.querySelector("#yearlyReturnInput"),
   runButton: document.querySelector("#runButton"),
   exportButton: document.querySelector("#exportButton"),
-  diagnosticsButton: document.querySelector("#diagnosticsButton"),
   notice: document.querySelector("#notice"),
   resultBody: document.querySelector("#resultBody"),
   eligibleMetricLabel: document.querySelector("#eligibleMetricLabel"),
@@ -908,17 +907,6 @@ function updateRunButtonState() {
   elements.runButton.classList.toggle("run-refresh", isRefresh);
   elements.runButton.classList.toggle("run-scan", !isRefresh);
   elements.runButton.classList.remove("run-busy");
-  updateDiagnosticsButtonState();
-}
-
-function updateDiagnosticsButtonState() {
-  if (!elements.diagnosticsButton) {
-    return;
-  }
-
-  const hasResult = Boolean(activeResult());
-  elements.diagnosticsButton.hidden = !hasResult;
-  elements.diagnosticsButton.disabled = !hasResult;
 }
 
 function setRunButtonScanning() {
@@ -926,7 +914,6 @@ function setRunButtonScanning() {
   elements.runButton.textContent = "Scanning...";
   elements.runButton.classList.remove("run-scan", "run-refresh");
   elements.runButton.classList.add("run-busy");
-  updateDiagnosticsButtonState();
 }
 
 function blankManualCspSymbol() {
@@ -1540,7 +1527,6 @@ function renderRows() {
     elements.resultBody.innerHTML =
       '<tr class="empty-row"><td colspan="14" class="empty-cell">No scan has run yet.</td></tr>';
     elements.exportButton.disabled = true;
-    updateDiagnosticsButtonState();
     return;
   }
 
@@ -1571,7 +1557,6 @@ function renderSummary(result) {
           ? "Enter manual CSP symbols, then click Scan."
           : "Click Scan to populate the table.";
     updateRunButtonState();
-    updateDiagnosticsButtonState();
     return;
   }
 
@@ -1600,7 +1585,6 @@ function renderSummary(result) {
       ? `${result.source} source - ${result.symbols.length} covered-call rows scanned`
       : `${result.source} source - ${result.symbols.length} symbols scanned`;
   updateRunButtonState();
-  updateDiagnosticsButtonState();
 }
 
 function clearPortfolioReallocationTimer() {
@@ -1960,12 +1944,18 @@ async function runCoveredCallScan() {
   );
 
   try {
-    if (isCcAutoMode()) {
-      const stillReady = await refreshExtensionHelper({ silent: false });
-      if (!stillReady) {
-        throw new Error("Chrome extension helper is not installed or did not respond.");
-      }
+    if (state.mode === "live" && state.helper.installed) {
+      await requestExtension(
+        "prepareRobinhoodScan",
+        {
+          strategy: "cc",
+          inputMode: state.ccInputMode
+        },
+        45000
+      );
+    }
 
+    if (isCcAutoMode()) {
       const extraction = await requestExtension("extractStockPositions", {}, 300000);
       state.autoCcPositions = normalizeImportedStockPositions(extraction.positions);
       positionsForScan = state.autoCcPositions;
@@ -2093,10 +2083,14 @@ async function runScan() {
     const screener = selectedScreener();
 
     if (state.mode === "live" && state.helper.installed) {
-      const stillReady = await refreshExtensionHelper({ silent: false });
-      if (!stillReady) {
-        throw new Error("Chrome extension helper is not installed or did not respond.");
-      }
+      await requestExtension(
+        "prepareRobinhoodScan",
+        {
+          strategy: "csp",
+          inputMode: state.cspInputMode
+        },
+        45000
+      );
 
       if (!isCspAutoMode()) {
         helperSymbols = manualSymbols;
@@ -2326,103 +2320,6 @@ function activeForecastResult() {
 
 function activeOptionQuotesBySymbol() {
   return state.strategy === "cc" ? state.lastCcOptionQuotesBySymbol : state.lastOptionQuotesBySymbol;
-}
-
-function activeOptionDiagnosticsBySymbol() {
-  return state.strategy === "cc"
-    ? state.lastCcOptionDiagnosticsBySymbol
-    : state.lastOptionDiagnosticsBySymbol;
-}
-
-function safeRowDiagnostic(row) {
-  return {
-    symbol: row.symbol,
-    status: rowStatus(row),
-    reason: row.reason || row.error || "",
-    currentPrice: row.currentPrice ?? null,
-    minTarget: row.minTarget ?? null,
-    averageTarget: row.averageTarget ?? null,
-    maxTarget: row.maxTarget ?? null,
-    cspStrike: row.cspStrike ?? null,
-    cspBid: row.cspBid ?? null,
-    cspReturnPercent: row.cspReturnPercent ?? null,
-    ccStrike: row.ccStrike ?? null,
-    ccBid: row.ccBid ?? null,
-    ccReturnPercent: row.ccReturnPercent ?? null,
-    contracts: row.contracts ?? null,
-    actualCollateralDollars: row.actualCollateralDollars ?? null,
-    totalReturnDollars: row.totalReturnDollars ?? null,
-    totalReturnPercent: row.totalReturnPercent ?? null
-  };
-}
-
-function safeDiagnosticsBySymbol(diagnosticsBySymbol) {
-  if (!diagnosticsBySymbol || typeof diagnosticsBySymbol !== "object") {
-    return {};
-  }
-
-  return Object.fromEntries(
-    Object.entries(diagnosticsBySymbol).map(([symbol, diagnostics]) => [
-      symbol,
-      {
-        status: diagnostics?.status || "",
-        source: diagnostics?.source || "",
-        error: diagnostics?.error ? String(diagnostics.error).slice(0, 300) : "",
-        errors: Array.isArray(diagnostics?.errors)
-          ? diagnostics.errors.map((error) => String(error).slice(0, 300))
-          : [],
-        warnings: Array.isArray(diagnostics?.warnings)
-          ? diagnostics.warnings.map((warning) => String(warning).slice(0, 300))
-          : []
-      }
-    ])
-  );
-}
-
-function buildDiagnosticsExport() {
-  const result = activeResult();
-  const forecastResult = activeForecastResult();
-  const optionQuotesBySymbol = activeOptionQuotesBySymbol() || {};
-  const optionDiagnosticsBySymbol = activeOptionDiagnosticsBySymbol() || {};
-
-  return {
-    app: "wheel-strategy-screener",
-    exportedAt: new Date().toISOString(),
-    appVersion: state.versionInfo?.appVersion || null,
-    helperVersion: state.helper.version || state.versionInfo?.helperVersion || null,
-    strategy: state.strategy,
-    strategyMode: state.strategy === "cc" ? state.ccInputMode : state.cspInputMode,
-    dataSource: state.mode,
-    source: result?.source || null,
-    rowCount: result?.rows?.length || 0,
-    symbols: result?.symbols || [],
-    optionRequestCount: Array.isArray(forecastResult?.optionRequests)
-      ? forecastResult.optionRequests.length
-      : 0,
-    optionQuoteSymbols: Object.keys(optionQuotesBySymbol),
-    rows: result?.rows?.map(safeRowDiagnostic) || [],
-    helperDiagnostics: safeDiagnosticsBySymbol(optionDiagnosticsBySymbol)
-  };
-}
-
-function exportDiagnostics() {
-  const result = activeResult();
-  if (!result) {
-    return;
-  }
-
-  const diagnostics = buildDiagnosticsExport();
-  const blob = new Blob([JSON.stringify(diagnostics, null, 2)], {
-    type: "application/json;charset=utf-8"
-  });
-  const url = URL.createObjectURL(blob);
-  const link = document.createElement("a");
-  link.href = url;
-  link.download = `wheel-screener-diagnostics-${state.strategy}-${new Date()
-    .toISOString()
-    .slice(0, 10)}.json`;
-  link.click();
-  URL.revokeObjectURL(url);
 }
 
 function buildSettingsExport() {
@@ -2893,7 +2790,6 @@ async function init() {
   bindCcList();
   elements.runButton.addEventListener("click", runScan);
   elements.exportButton.addEventListener("click", exportCsv);
-  elements.diagnosticsButton?.addEventListener("click", exportDiagnostics);
   elements.connectButton.addEventListener("click", connectRobinhood);
   elements.portfolioInput.addEventListener("input", schedulePortfolioReallocation);
   elements.portfolioInput.addEventListener("change", schedulePortfolioReallocation);

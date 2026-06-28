@@ -10,7 +10,7 @@ const {
 
 test("normalizes symbols for TradingView URLs", () => {
   assert.equal(normalizeSymbolForTradingView("brk.b"), "BRK-B");
-  assert.equal(normalizeSymbolForTradingView(" onds "), "ONDS");
+  assert.equal(normalizeSymbolForTradingView(" aaa "), "AAA");
 });
 
 test("parses localized numeric text", () => {
@@ -23,13 +23,13 @@ test("parses forecast values from TradingView-like HTML text", () => {
     <main>
       <p>The 8 analysts offering 1-year price forecasts have estimates.</p>
       <p>
-        According to analysts, ONDS price target is 20.13 USD with a max
+        According to analysts, AAA price target is 20.13 USD with a max
         estimate of 25.00 USD and a min estimate of 16.00 USD.
       </p>
     </main>
   `;
 
-  const parsed = parseForecastHtml(html, "ONDS");
+  const parsed = parseForecastHtml(html, "AAA");
 
   assert.equal(parsed.averageTarget, 20.13);
   assert.equal(parsed.maxTarget, 25);
@@ -40,10 +40,10 @@ test("parses forecast values from TradingView-like HTML text", () => {
 test("parses current price from TradingView symbol page HTML", () => {
   const html = `
     <span class="last-fzcYMweq js-symbol-last">2.40</span>
-    <span>NASDAQ:RR</span>
+    <span>NASDAQ:BBB</span>
   `;
 
-  assert.equal(parseCurrentPriceHtml(html, "RR"), 2.4);
+  assert.equal(parseCurrentPriceHtml(html, "BBB"), 2.4);
 });
 
 test("handles unavailable target estimates", () => {
@@ -67,15 +67,15 @@ test("maps TradingView scanner forecast columns", async () => {
       totalCount: 1,
       data: [
         {
-          s: "NASDAQ:ONDS",
-          d: [9.96, 10.01, "USD", "ONDS", "Ondas Inc", "NASDAQ", 20.125, 25, 16, 9, 0, 0]
+          s: "NASDAQ:AAA",
+          d: [9.96, 10.01, "USD", "AAA", "Example Inc", "NASDAQ", 20.125, 25, 16, 9, 0, 0]
         }
       ]
     })
   });
 
   try {
-    const forecast = await fetchScannerForecast("NASDAQ", "ONDS");
+    const forecast = await fetchScannerForecast("NASDAQ", "AAA");
 
     assert.equal(forecast.currentPrice, 9.96);
     assert.equal(forecast.averageTarget, 20.125);
@@ -96,15 +96,15 @@ test("falls back to close when TradingView realtime current price is unavailable
       totalCount: 1,
       data: [
         {
-          s: "NASDAQ:ONDS",
-          d: [null, 10.01, "USD", "ONDS", "Ondas Inc", "NASDAQ", 20.125, 25, 16, 9, 0, 0]
+          s: "NASDAQ:AAA",
+          d: [null, 10.01, "USD", "AAA", "Example Inc", "NASDAQ", 20.125, 25, 16, 9, 0, 0]
         }
       ]
     })
   });
 
   try {
-    const forecast = await fetchScannerForecast("NASDAQ", "ONDS");
+    const forecast = await fetchScannerForecast("NASDAQ", "AAA");
 
     assert.equal(forecast.currentPrice, 10.01);
     assert.equal(forecast.minTarget, 16);

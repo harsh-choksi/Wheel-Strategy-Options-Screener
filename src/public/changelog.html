@@ -4,9 +4,9 @@
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <title>Changelog - Wheel Strategy Screener</title>
-    <link rel="icon" href="/favicon.ico?v=0.2.8" sizes="any" />
-    <link rel="icon" href="/favicon-32.png?v=0.2.8" sizes="32x32" type="image/png" />
-    <link rel="apple-touch-icon" href="/apple-touch-icon.png?v=0.2.8" />
+    <link rel="icon" href="/favicon.ico?v=0.2.14" sizes="any" />
+    <link rel="icon" href="/favicon-32.png?v=0.2.14" sizes="32x32" type="image/png" />
+    <link rel="apple-touch-icon" href="/apple-touch-icon.png?v=0.2.14" />
     <link rel="stylesheet" href="/styles.css" />
   </head>
   <body class="simple-shell">
@@ -28,6 +28,103 @@
     </header>
 
     <main class="app-shell changelog-page">
+      <section class="guide-section" aria-labelledby="release-0214">
+        <div class="guide-section-heading">
+          <p class="step-kicker">Helper-breaking</p>
+          <h2 id="release-0214">0.2.14 - Authoritative CSP Screener Name Validation</h2>
+          <p>
+            Reload the Chrome helper after deploying this release so CSP Auto validates the open
+            screener through Robinhood's dedicated name control.
+          </p>
+        </div>
+        <ul class="guide-list">
+          <li>The open screener name now comes from Robinhood's dedicated screener-name button.</li>
+          <li>Sidebar labels cannot falsely confirm a different open screener.</li>
+          <li>Route, name-confirmation, and no-symbol failures now report separately.</li>
+        </ul>
+      </section>
+
+      <section class="guide-section" aria-labelledby="release-0213">
+        <div class="guide-section-heading">
+          <p class="step-kicker">Helper-breaking</p>
+          <h2 id="release-0213">0.2.13 - Restored CSP Screener Symbol Extraction</h2>
+          <p>
+            Reload the Chrome helper after deploying this release so CSP Auto reads the complete
+            confirmed screener grid after opening its saved label.
+          </p>
+        </div>
+        <ul class="guide-list">
+          <li>Symbol extraction now covers sibling header and stock-grid containers inside the screener main region.</li>
+          <li>Plain-text and scroll-loaded screener symbols are collected again.</li>
+          <li>The exact-name click and Home-page extraction safeguards remain in place.</li>
+        </ul>
+      </section>
+
+      <section class="guide-section" aria-labelledby="release-0212">
+        <div class="guide-section-heading">
+          <p class="step-kicker">Helper-breaking</p>
+          <h2 id="release-0212">0.2.12 - Direct CSP Screener Label Click</h2>
+          <p>
+            Reload the Chrome helper after deploying this release so CSP Auto clicks the exact
+            saved screener text label in Robinhood's Lists panel.
+          </p>
+        </div>
+        <ul class="guide-list">
+          <li>The exact matching Robinhood screener label is now the click target.</li>
+          <li>The configured browser-local name and <code>/screener/...</code> confirmation remain required.</li>
+          <li>Home holdings remain excluded from CSP Auto extraction.</li>
+        </ul>
+      </section>
+
+      <section class="guide-section" aria-labelledby="release-0211">
+        <div class="guide-section-heading">
+          <p class="step-kicker">Helper-breaking</p>
+          <h2 id="release-0211">0.2.11 - Reliable Robinhood Scan Handoff</h2>
+          <p>
+            Reload the Chrome helper after deploying this release so live scans use the new
+            Robinhood foregrounding and exact screener confirmation flow.
+          </p>
+        </div>
+        <ul class="guide-list">
+          <li>Live Scan and Refresh now bring the Robinhood tab and Chrome window forward immediately.</li>
+          <li>CSP Auto confirms the selected name and a real <code>/screener/...</code> page before extracting symbols.</li>
+          <li>A mismatched open screener safely retries from Home without reading Home holdings.</li>
+        </ul>
+      </section>
+
+      <section class="guide-section" aria-labelledby="release-0210">
+        <div class="guide-section-heading">
+          <p class="step-kicker">Helper-breaking</p>
+          <h2 id="release-0210">0.2.10 - Faster CSP Auto List Selection</h2>
+          <p>
+            Reload the Chrome helper after deploying this release so CSP Auto searches the
+            Robinhood Home Lists panel directly.
+          </p>
+        </div>
+        <ul class="guide-list">
+          <li>Fixed CSP Auto list selection to click the exact saved screener from the Home Lists panel.</li>
+          <li>Stopped the helper from slowly scrolling the Home page while searching for the saved screener.</li>
+          <li>Kept Home holdings out of CSP Auto symbol extraction when the saved list cannot be opened.</li>
+        </ul>
+      </section>
+
+      <section class="guide-section" aria-labelledby="release-029">
+        <div class="guide-section-heading">
+          <p class="step-kicker">Helper-breaking</p>
+          <h2 id="release-029">0.2.9 - Robinhood Auto Extraction Repair</h2>
+          <p>
+            Reload the Chrome helper after deploying this release so CSP Auto and CC Auto use the
+            repaired Robinhood extraction flow.
+          </p>
+        </div>
+        <ul class="guide-list">
+          <li>Fixed CSP Auto to open Robinhood Home and click the exact saved screener name before extracting symbols.</li>
+          <li>Fixed CC Auto to import positions from every visible Investing account, including the current account first.</li>
+          <li>Updated CC Auto stock parsing for Robinhood's current Stocks table and average-cost markup.</li>
+          <li>Confirmed CC Auto continues through Sell Call quote extraction and covered-call finalization after import.</li>
+        </ul>
+      </section>
+
       <section class="guide-section" aria-labelledby="release-028">
         <div class="guide-section-heading">
           <p class="step-kicker">Helper-breaking</p>
@@ -40,7 +137,7 @@
         <ul class="guide-list">
           <li>Added the Command Center at <code>/</code> and moved the scanner dashboard to <code>/dashboard.html</code>.</li>
           <li>Added safe <code>/healthz</code> and <code>/api/version</code> endpoints.</li>
-          <li>Added Settings release metadata, diagnostics export, Helper Health, and this changelog.</li>
+          <li>Added Settings release metadata, Helper Health, and this changelog.</li>
           <li>Documented release checklist, rollback notes, monitoring checks, and chatbot boundaries.</li>
         </ul>
       </section>

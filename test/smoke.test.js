@@ -203,13 +203,13 @@ function cspForecastPayload(body = {}) {
     source: body.source || "mock",
     portfolioValue: Number.parseFloat(body.portfolioValue) || 10000,
     generatedAt: new Date().toISOString(),
-    symbols: ["ONDS"],
+    symbols: ["AAA"],
     eligibleCount: 0,
-    optionRequests: [{ symbol: "ONDS", currentPrice: 9.61 }],
+    optionRequests: [{ symbol: "AAA", currentPrice: 9.61 }],
     rows: [
       {
         order: 1,
-        symbol: "ONDS",
+        symbol: "AAA",
         status: "ok",
         currentPrice: 9.61,
         minTarget: 16,
@@ -261,6 +261,7 @@ function ccForecastPayload(body = {}) {
       maxTarget: 18,
       averageCost: Number.parseFloat(position.averageCost),
       contracts: Number.parseFloat(position.contracts),
+      coveredCallUsable: position.coveredCallUsable === false ? false : true,
       eligible: false
     }))
     .filter((row) => row.symbol);
@@ -272,11 +273,13 @@ function ccForecastPayload(body = {}) {
     generatedAt: new Date().toISOString(),
     symbols: rows.map((row) => row.symbol),
     eligibleCount: 0,
-    optionRequests: rows.map((row) => ({
-      symbol: row.symbol,
-      currentPrice: row.currentPrice,
-      averageCost: row.averageCost
-    })),
+    optionRequests: rows
+      .filter((row) => row.coveredCallUsable !== false && Number.isFinite(row.contracts) && row.contracts > 0)
+      .map((row) => ({
+        symbol: row.symbol,
+        currentPrice: row.currentPrice,
+        averageCost: row.averageCost
+      })),
     rows
   };
 }
@@ -304,12 +307,40 @@ function ccFinalPayload(body = {}) {
   };
 }
 
-async function installDashboardApiStubs(page) {
-  await page.route("**/api/forecast", (route) => fulfillJson(route, cspForecastPayload(readPostJson(route))));
-  await page.route("**/api/finalize", (route) => fulfillJson(route, cspFinalPayload(readPostJson(route))));
-  await page.route("**/api/reallocate", (route) => fulfillJson(route, cspFinalPayload(readPostJson(route))));
-  await page.route("**/api/covered-calls/forecast", (route) => fulfillJson(route, ccForecastPayload(readPostJson(route))));
-  await page.route("**/api/covered-calls/finalize", (route) => fulfillJson(route, ccFinalPayload(readPostJson(route))));
+async function installDashboardApiStubs(page, recorder = null) {
+  const record = (kind, route, body) => {
+    recorder?.push({
+      kind,
+      url: route.request().url(),
+      body
+    });
+  };
+
+  await page.route("**/api/forecast", (route) => {
+    const body = readPostJson(route);
+    record("cspForecast", route, body);
+    return fulfillJson(route, cspForecastPayload(body));
+  });
+  await page.route("**/api/finalize", (route) => {
+    const body = readPostJson(route);
+    record("cspFinalize", route, body);
+    return fulfillJson(route, cspFinalPayload(body));
+  });
+  await page.route("**/api/reallocate", (route) => {
+    const body = readPostJson(route);
+    record("cspReallocate", route, body);
+    return fulfillJson(route, cspFinalPayload(body));
+  });
+  await page.route("**/api/covered-calls/forecast", (route) => {
+    const body = readPostJson(route);
+    record("ccForecast", route, body);
+    return fulfillJson(route, ccForecastPayload(body));
+  });
+  await page.route("**/api/covered-calls/finalize", (route) => {
+    const body = readPostJson(route);
+    record("ccFinalize", route, body);
+    return fulfillJson(route, ccFinalPayload(body));
+  });
 }
 
 async function assertInputCaret(page, selector, initialValue, caretPosition, typedText, expectedValue) {
@@ -489,6 +520,7 @@ function robinhoodInvestingFixtureHtml() {
         <style>
           body { margin: 0; background: #000; color: #fff; font-family: Arial, sans-serif; }
           main { padding: 24px 32px 1200px; }
+          .account-control { margin-bottom: 760px; }
           #accountDropdown, [data-account-option] {
             display: flex;
             align-items: center;
@@ -507,6 +539,18 @@ function robinhoodInvestingFixtureHtml() {
             border: 1px solid #454b50;
           }
           #accountMenu[hidden] { display: none; }
+          .distractor-bar {
+            display: flex;
+            gap: 12px;
+            margin: 18px 0 28px;
+          }
+          .distractor-bar button {
+            min-height: 36px;
+            color: #fff;
+            background: #15191c;
+            border: 1px solid #3a3f42;
+            padding: 6px 12px;
+          }
           .web-app-emotion-cache-11cxeba {
             min-height: 40px;
             display: flex;
@@ -537,7 +581,8 @@ function robinhoodInvestingFixtureHtml() {
           .gic1rUwO9ldk9zzcggr7uA-- {
             color: #b5dcff;
           }
-          .-URCNCRkOrsFeQ6BHrJU3Q-- {
+          .-URCNCRkOrsFeQ6BHrJU3Q--,
+          .sTkTMJqe3B7iJLnJngmcMA-- {
             color: #fff;
           }
         </style>
@@ -545,28 +590,41 @@ function robinhoodInvestingFixtureHtml() {
       <body>
         <main>
           <h1>Investing</h1>
-          <button id="accountDropdown" type="button" aria-haspopup="listbox" aria-busy="false">
-            <svg fill="none" height="24" role="img" viewBox="0 0 24 24" width="24"></svg>
-            <div><p id="currentAccountLabel">Personal</p></div>
-          </button>
-          <div id="accountMenu" hidden>
-            <div class="web-app-emotion-cache-11cxeba"><span class="css-v72tci">Individual</span></div>
-            <button type="button" aria-busy="false" class="web-app-emotion-cache-1uknxyu" data-account-option="individual">
-              <svg fill="none" height="24" role="img" viewBox="0 0 24 24" width="24"></svg>
-              <div class="web-app-emotion-cache-m9fipx"><p class="css-y3z1hq">Personal</p></div>
+          <div class="distractor-bar" aria-label="Unrelated controls">
+            <button id="helpIconButton" type="button" aria-label="Help">
+              <svg fill="none" height="16" role="img" viewBox="0 0 16 16" width="16"><path d="M5.368 6.453C5.39 4.793 6.425 3.8 8.133 3.8c1.428 0 2.5.938 2.5 2.177 0 1.07-.526 1.512-1.156 1.939a3.16 3.16 0 0 1-.127.086l-.09.06-.022.016c-.429.285-.713.475-.713.874v.133H7.16v-.217c0-.82.462-1.183 1.071-1.575l.077-.05c.497-.335.89-.601.89-1.19 0-.202-.085-.874-1.093-.874-.833 0-1.26.462-1.316 1.4l-.007.112-1.414-.14v-.098Z" fill="currentColor"></path></svg>
             </button>
-            <div class="web-app-emotion-cache-11cxeba"><span class="css-v72tci">Retirement</span></div>
-            <button type="button" aria-busy="false" class="web-app-emotion-cache-1uknxyu" data-account-option="retirement">
-              <svg fill="none" height="24" role="img" viewBox="0 0 24 24" width="24"></svg>
-              <div class="web-app-emotion-cache-m9fipx"><p class="css-y3z1hq">Roth IRA</p></div>
-            </button>
-            <div class="web-app-emotion-cache-11cxeba"><span class="css-v72tci">Joint</span></div>
-            <button type="button" aria-busy="false" class="web-app-emotion-cache-1uknxyu" data-account-option="joint">
-              <svg fill="none" height="24" role="img" viewBox="0 0 24 24" width="24"></svg>
-              <div class="web-app-emotion-cache-m9fipx"><p class="css-y3z1hq">Joint investing</p></div>
+            <button id="navigationButton" type="button">Portfolio overview</button>
+            <button id="sortCombobox" type="button" role="combobox" aria-busy="false">
+              <span><div>Sort menu</div></span>
+              <svg fill="none" height="16" role="img" viewBox="0 0 16 16" width="16"></svg>
             </button>
           </div>
-          <h2>Stocks</h2>
+          <div class="web-app-emotion-cache-16lfj6j account-control">
+            <button id="accountDropdown" type="button" role="combobox" aria-busy="false" class="web-app-emotion-cache-14qs35g">
+              <span class="css-1md9imy"><div class="web-app-emotion-cache-1a07lwf" id="currentAccountLabel">Account One</div></span>
+              <svg fill="none" height="16" role="img" viewBox="0 0 16 16" width="16"></svg>
+            </button>
+            <div id="accountMenu" hidden>
+              <div class="web-app-emotion-cache-11cxeba"><span class="css-v72tci">Group Alpha</span></div>
+              <button type="button" aria-busy="false" class="web-app-emotion-cache-1uknxyu" data-account-option="alpha">
+                <svg fill="none" height="24" role="img" viewBox="0 0 24 24" width="24"></svg>
+                <div class="web-app-emotion-cache-m9fipx"><p class="css-y3z1hq">Account One</p></div>
+                <svg aria-label="Selected account" fill="none" height="24" role="img" viewBox="0 0 24 24" width="24"></svg>
+              </button>
+              <div class="web-app-emotion-cache-11cxeba"><span class="css-v72tci">Group Beta</span></div>
+              <button type="button" aria-busy="false" class="web-app-emotion-cache-1uknxyu" data-account-option="beta">
+                <svg fill="none" height="24" role="img" viewBox="0 0 24 24" width="24"></svg>
+                <div class="web-app-emotion-cache-m9fipx"><p class="css-y3z1hq">Account Two</p></div>
+              </button>
+              <div class="web-app-emotion-cache-11cxeba"><span class="css-v72tci">Group Gamma</span></div>
+              <button type="button" aria-busy="false" class="web-app-emotion-cache-1uknxyu" data-account-option="gamma">
+                <svg fill="none" height="24" role="img" viewBox="0 0 24 24" width="24"></svg>
+                <div class="web-app-emotion-cache-m9fipx"><p class="css-y3z1hq">Account Three</p></div>
+              </button>
+            </div>
+          </div>
+          <h2 class="web-app-emotion-cache-mzpff5"><span class="css-z4smye">Stocks</span></h2>
           <div class="stock-table" aria-label="Stocks">
             <div class="stock-header">Name</div>
             <div class="stock-header">Symbol</div>
@@ -577,23 +635,30 @@ function robinhoodInvestingFixtureHtml() {
           </div>
         </main>
         <script>
+          window.__clickedControls = [];
           const accounts = {
-            individual: [
-              ["POET Technologies", "POET", "400", "$12.45", "$12.46", "$4,980.00"],
-              ["Richtech Robotics", "RR", "3,300", "$2.11", "$3.81", "$6,963.00"]
+            alpha: [
+              ["Alpha Example Inc.", "AAA", "200", "$24.10", "$21.55", "$4,820.00"],
+              ["Beta Example Corp.", "BBB", "450", "$12.45", "$13.37", "$5,602.50"],
+              ["Gamma Example Ltd.", "CCC", "1,250", "$4.20", "$4.75", "$5,250.00"]
             ],
-            retirement: [
-              ["POET Technologies", "POET", "125", "$12.10", "$11.11", "$1,512.50"]
+            beta: [
+              ["Beta Example Corp.", "BBB", "125", "$12.10", "$11.11", "$1,512.50"]
             ],
-            joint: [
-              ["Acme Biotech", "ABC", "50", "$7.30", "$7.25", "$365.00"]
+            gamma: [
+              ["Delta Example Co.", "DDD", "75", "$7.30", "$7.25", "$547.50"]
             ]
           };
           const labels = {
-            individual: "Personal",
-            retirement: "Roth IRA",
-            joint: "Joint investing"
+            alpha: "Account One",
+            beta: "Account Two",
+            gamma: "Account Three"
           };
+          for (const id of ["helpIconButton", "navigationButton", "sortCombobox"]) {
+            document.getElementById(id).addEventListener("click", () => {
+              window.__clickedControls.push("distractor:" + id);
+            });
+          }
           function renderRows(key) {
             document.querySelectorAll(".stock-table [data-stock-cell]").forEach((cell) => cell.remove());
             const table = document.querySelector(".stock-table");
@@ -604,7 +669,7 @@ function robinhoodInvestingFixtureHtml() {
                 '<span class="gic1rUwO9ldk9zzcggr7uA--">' + symbol + '</span>',
                 '<span>' + shares + '</span>',
                 '<span>' + price + '</span>',
-                '<span class="-URCNCRkOrsFeQ6BHrJU3Q--">' + averageCost + '</span>',
+                '<span class="sTkTMJqe3B7iJLnJngmcMA--">' + averageCost + '</span>',
                 '<span>' + equity + '</span>'
               ];
               for (const html of cells) {
@@ -617,6 +682,7 @@ function robinhoodInvestingFixtureHtml() {
             }
           }
           document.getElementById("accountDropdown").addEventListener("click", () => {
+            window.__clickedControls.push("control:account-dropdown");
             document.getElementById("accountMenu").hidden = !document.getElementById("accountMenu").hidden;
           });
           document.addEventListener("click", (event) => {
@@ -625,11 +691,218 @@ function robinhoodInvestingFixtureHtml() {
               return;
             }
             const key = option.dataset.accountOption;
+            window.__clickedControls.push("option:" + key);
             document.getElementById("currentAccountLabel").textContent = labels[key];
             document.getElementById("accountMenu").hidden = true;
             renderRows(key);
           });
-          renderRows("individual");
+          renderRows("alpha");
+        </script>
+      </body>
+    </html>`;
+}
+
+function robinhoodScreenerFixtureHtml({
+  targetBelowFold = false,
+  navigateOnClick = true,
+  nameControlMode = "title"
+} = {}) {
+  const targetName = "Primary Saved Screener";
+  const savedListNames = targetBelowFold
+    ? [
+        "Neutral Saved List One",
+        "Neutral Saved List Two",
+        "Neutral Saved List Three",
+        "Neutral Saved List Four",
+        targetName,
+        "Neutral Saved List Five"
+      ]
+    : [
+        `${targetName} Growth`,
+        `${targetName} Income`,
+        targetName
+      ];
+  const fillerSymbols = ["XXX", "YYY", "ZZZ", "QQQ", "VVV", "WWW"];
+  const symbolsByScreener = Object.fromEntries(
+    savedListNames.map((name, index) => [
+      name,
+      name === targetName ? ["AAA", "BBB", "CCC", "DDD", "EEE"] : [fillerSymbols[index] || "MMM"]
+    ])
+  );
+  const savedListRows = savedListNames.map((name) => `
+              <div class="web-app-emotion-cache-8uhtka" data-screener-name="${name}">
+                <span class="css-y3z1hq">${name}</span>
+              </div>`).join("");
+
+  return `<!doctype html>
+    <html>
+      <head>
+        <meta charset="utf-8" />
+        <title>Robinhood Screener Fixture</title>
+        <style>
+          body { margin: 0; color: #111; font-family: Arial, sans-serif; }
+          main { display: grid; grid-template-columns: 1fr 420px; gap: 18px; padding: 110px 28px; }
+          .portfolio-home {
+            display: grid;
+            gap: 16px;
+            align-content: start;
+          }
+          .home-holdings {
+            border: 1px solid #d8e0e5;
+            padding: 18px;
+          }
+          .home-holdings a {
+            display: block;
+            padding: 10px 0;
+          }
+          [hidden] { display: none !important; }
+          .screener-view {
+            display: grid;
+            gap: 0;
+          }
+          .screener-header {
+            border: 1px solid #d8e0e5;
+            padding: 18px;
+          }
+          .screener-grid {
+            border: 1px solid #d8e0e5;
+            border-top: 0;
+          }
+          .screener-grid-scroll {
+            max-height: 150px;
+            overflow-y: auto;
+          }
+          .screener-grid-heading,
+          [data-stock-row] {
+            display: grid;
+            grid-template-columns: 52px 180px 160px;
+            gap: 16px;
+            align-items: center;
+            min-height: 68px;
+            border-bottom: 1px solid #d8e0e5;
+          }
+          .lists-card {
+            border: 1px solid #d8e0e5;
+          }
+          .lists-scroll {
+            max-height: ${targetBelowFold ? "190px" : "360px"};
+            overflow-y: auto;
+          }
+          .lists-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            min-height: 64px;
+            padding: 0 28px;
+            border-bottom: 1px solid #d8e0e5;
+          }
+          [data-screener-name] {
+            display: flex;
+            align-items: center;
+            gap: 14px;
+            min-height: 88px;
+            border: 1px solid #d8e0e5;
+            padding: 8px 28px;
+            cursor: pointer;
+          }
+          [data-screener-name] span { font-weight: 700; }
+        </style>
+      </head>
+      <body>
+        <main>
+          <section class="portfolio-home" aria-label="Portfolio home">
+            <div id="homeView">
+              <h1>Account Home</h1>
+              <div class="home-holdings" aria-label="Visible holdings">
+                <a href="/stocks/HHH"><strong>HHH</strong><span> 200 shares</span></a>
+                <a href="/stocks/III"><strong>III</strong><span> 125 shares</span></a>
+                <a href="/stocks/JJJ"><strong>JJJ</strong><span> 50 shares</span></a>
+              </div>
+            </div>
+            <div id="screenerView" class="screener-view" aria-label="Screener detail" hidden>
+              <section id="screenerHeader" class="screener-header"></section>
+              <section id="screenerGrid" class="screener-grid">
+                <div class="screener-grid-heading"><span>Rank</span><strong>Symbol</strong><span>Company</span></div>
+                <div id="screenerGridScroll" class="screener-grid-scroll">
+                  <div id="screenerRows"></div>
+                  <div id="screenerGridSpacer" aria-hidden="true"></div>
+                </div>
+              </section>
+            </div>
+          </section>
+          <section class="lists-card" aria-label="Saved lists">
+            <div class="css-1mev3pd lists-header">
+              <span class="css-bp1p2y">Lists</span>
+              <button type="button" aria-label="Create new list or screener" data-testid="SidebarCreateListButton" aria-busy="false" class="web-app-emotion-cache-v5z1gx">+</button>
+            </div>
+            <div class="lists-scroll">
+${savedListRows}
+            </div>
+          </section>
+        </main>
+        <script>
+          window.__bodyWheelCount = 0;
+          window.__listsWheelCount = 0;
+          window.__bodyWheelBeforeScreenerClick = 0;
+          document.addEventListener("wheel", (event) => {
+            if (event.target.closest(".lists-scroll")) {
+              window.__listsWheelCount += 1;
+            } else {
+              window.__bodyWheelCount += 1;
+              if (!window.__clickedScreener) {
+                window.__bodyWheelBeforeScreenerClick += 1;
+              }
+            }
+          });
+          const symbolsByScreener = ${JSON.stringify(symbolsByScreener)};
+          const nameControlMode = ${JSON.stringify(nameControlMode)};
+          function renderScreener(name) {
+            window.__clickedScreener = name;
+            if (${navigateOnClick ? "true" : "false"}) {
+              const fixtureId = Object.keys(symbolsByScreener).indexOf(name) + 1;
+              window.history.pushState({}, "", "/screener/fixture-" + fixtureId + "?source=lists_section_saved_screener");
+              document.getElementById("homeView")?.remove();
+              document.getElementById("screenerView").hidden = false;
+            }
+            const symbols = symbolsByScreener[name] || [];
+            const titleValue = nameControlMode === "text-only"
+              ? ""
+              : nameControlMode === "normalized-title"
+                ? "  " + name.toUpperCase().replace(/ /g, "   ") + "  "
+                : name;
+            document.getElementById("screenerHeader").innerHTML =
+              nameControlMode === "missing"
+                ? '<p>Screener loading</p>'
+                : '<button type="button" data-testid="screener-name-input" title="' + titleValue + '">' +
+                  '<span class="css-6547ym">' + name + '</span></button>' +
+                  '<p>' + symbols.length + ' items</p>';
+            const rows = document.getElementById("screenerRows");
+            const spacer = document.getElementById("screenerGridSpacer");
+            const renderRows = (count) => {
+              rows.innerHTML = symbols.slice(0, count).map((symbol, index) =>
+                '<div data-stock-row>' +
+                '<span>' + (index + 1) + '</span><strong data-symbol-cell>' + symbol + '</strong><span>Company</span></div>'
+              ).join("");
+              spacer.style.height = count < symbols.length ? "900px" : "0px";
+              window.__renderedScreenerSymbols = symbols.slice(0, count);
+            };
+            renderRows(Math.min(2, symbols.length));
+            const scroll = document.getElementById("screenerGridScroll");
+            scroll.onscroll = () => {
+              if (scroll.scrollTop > 0) {
+                renderRows(symbols.length);
+              }
+            };
+          }
+          document.querySelectorAll("div.web-app-emotion-cache-8uhtka > span.css-y3z1hq").forEach((label) => {
+            label.addEventListener("click", (event) => {
+              window.__clickedScreenerTarget = {
+                tagName: event.target.tagName,
+                className: event.target.className
+              };
+              renderScreener(label.textContent.trim());
+            });
+          });
         </script>
       </body>
     </html>`;
@@ -659,6 +932,407 @@ async function sendRobinhoodHelperMessage(page, message) {
   }), message);
 }
 
+async function installDashboardExtensionStub(page) {
+  await page.addInitScript(() => {
+    window.__dashboardHelperRequests = [];
+    window.addEventListener("message", (event) => {
+      if (event.source !== window || event.data?.type !== "WHEEL_SCREENER_EXTENSION_REQUEST") {
+        return;
+      }
+
+      const request = {
+        action: event.data.action,
+        payload: event.data.payload || {}
+      };
+      window.__dashboardHelperRequests.push(request);
+
+      let payload = {};
+      if (request.action === "ping") {
+        payload = { installed: true, version: "0.2.14" };
+      } else if (request.action === "extractScreener") {
+        payload = {
+          source: "robinhood",
+          symbols: ["AAA"]
+        };
+      } else if (request.action === "extractStockPositions") {
+        payload = {
+          source: "robinhood-positions",
+          positions: [
+            { accountName: "Group Alpha - Account One", symbol: "AAA", shares: 200, averageCost: 21.55 },
+            { accountName: "Group Alpha - Account One", symbol: "BBB", shares: 450, averageCost: 13.37 },
+            { accountName: "Group Alpha - Account One", symbol: "CCC", shares: 1250, averageCost: 4.75 },
+            { accountName: "Group Beta - Account Two", symbol: "BBB", shares: 125, averageCost: 11.11 },
+            { accountName: "Group Gamma - Account Three", symbol: "DDD", shares: 75, averageCost: 7.25 }
+          ]
+        };
+      } else if (request.action === "extractCallOptionQuotes") {
+        const quotesBySymbol = {};
+        const diagnosticsBySymbol = {};
+        for (const requestRow of request.payload.requests || []) {
+          const symbol = String(requestRow.symbol || "").toUpperCase();
+          if (!symbol || quotesBySymbol[symbol]) {
+            continue;
+          }
+          quotesBySymbol[symbol] = [
+            {
+              strike: 14,
+              bid: 0.25,
+              rawText: "strike 14 price 0.25"
+            }
+          ];
+          diagnosticsBySymbol[symbol] = { quotesFound: 1 };
+        }
+        payload = {
+          optionQuotesBySymbol: quotesBySymbol,
+          optionDiagnosticsBySymbol: diagnosticsBySymbol
+        };
+      }
+
+      window.postMessage(
+        {
+          type: "WHEEL_SCREENER_EXTENSION_RESPONSE",
+          id: event.data.id,
+          ok: true,
+          payload
+        },
+        window.location.origin
+      );
+    });
+  });
+}
+
+async function announceDashboardExtensionReady(page) {
+  await page.evaluate(() => {
+    window.postMessage(
+      {
+        type: "WHEEL_SCREENER_EXTENSION_READY",
+        version: "0.2.14"
+      },
+      window.location.origin
+    );
+  });
+}
+
+async function assertCcAutoFinalizesImportedPositions(page, baseUrl) {
+  const apiCalls = [];
+  await installDashboardExtensionStub(page);
+  await installDashboardApiStubs(page, apiCalls);
+
+  await page.addInitScript(() => {
+    window.localStorage.setItem("wheel-screener-onboarding-v2", "true");
+  });
+  await page.goto(`${baseUrl}/dashboard.html?strategy=cc`, { waitUntil: "domcontentloaded" });
+  await announceDashboardExtensionReady(page);
+  await page.locator("#sourceModes").getByRole("button", { name: "Robinhood", exact: true }).waitFor({ timeout: 3000 });
+  await page.locator("#ccInputModes").getByRole("button", { name: "Auto", exact: true }).click();
+  await page.getByRole("button", { name: "Scan", exact: true }).click();
+  await page.waitForFunction(() => document.querySelector("#runButton")?.textContent.trim() === "Refresh");
+
+  const helperRequests = await page.evaluate(() => window.__dashboardHelperRequests || []);
+  const prepareRequest = helperRequests.find((request) => request.action === "prepareRobinhoodScan");
+  assert.deepEqual(prepareRequest?.payload, { strategy: "cc", inputMode: "auto" });
+  assert.ok(helperRequests.some((request) => request.action === "extractStockPositions"));
+  assert.ok(helperRequests.some((request) => request.action === "extractCallOptionQuotes"));
+  assert.ok(
+    helperRequests.findIndex((request) => request.action === "prepareRobinhoodScan") <
+      helperRequests.findIndex((request) => request.action === "extractStockPositions")
+  );
+  assert.ok(apiCalls.some((call) => call.kind === "ccForecast"));
+  assert.ok(apiCalls.some((call) => call.kind === "ccFinalize"));
+
+  const quoteRequest = helperRequests.find((request) => request.action === "extractCallOptionQuotes");
+  assert.ok(quoteRequest.payload.requests.some((request) => request.symbol === "AAA"));
+  assert.ok(quoteRequest.payload.requests.some((request) => request.symbol === "BBB"));
+  assert.ok(quoteRequest.payload.requests.some((request) => request.symbol === "CCC"));
+  assert.equal(quoteRequest.payload.requests.some((request) => request.symbol === "DDD"), false);
+
+  const symbolValues = await page.locator("[data-cc-field='symbol']").evaluateAll((inputs) =>
+    inputs.map((input) => input.value)
+  );
+  assert.ok(symbolValues.includes("AAA"));
+  assert.ok(symbolValues.includes("BBB"));
+  assert.ok(symbolValues.includes("CCC"));
+  assert.ok(symbolValues.includes("DDD"));
+  const rowText = await page.locator("#resultBody").innerText();
+  assert.match(rowText, /\$0\.25/);
+  assert.match(rowText, /\(10%\)/);
+}
+
+async function assertCspAutoUsesEditedScreenerName(page, baseUrl) {
+  const apiCalls = [];
+  await installDashboardExtensionStub(page);
+  await installDashboardApiStubs(page, apiCalls);
+  await page.addInitScript(() => {
+    window.localStorage.setItem("wheel-screener-onboarding-v2", "true");
+  });
+
+  await page.goto(`${baseUrl}/dashboard.html?strategy=csp`, { waitUntil: "domcontentloaded" });
+  await announceDashboardExtensionReady(page);
+  await page.locator("#cspInputModes").getByRole("button", { name: "Auto", exact: true }).click();
+  await page.getByRole("button", { name: "Manage", exact: true }).click();
+  await page.locator("#screenersDialog").waitFor({ state: "visible" });
+
+  const selectedId = await page.locator("#screenersList input[name='activeScreener']:checked").inputValue();
+  const editedName = "Neutral Edited Screener";
+  await page.locator(`#screenersList [data-screener-name='${selectedId}']`).fill(editedName);
+  await page.getByRole("button", { name: "Close screener manager", exact: true }).click();
+  await page.getByRole("button", { name: "Scan", exact: true }).click();
+  await page.waitForFunction(() => document.querySelector("#runButton")?.textContent.trim() === "Refresh");
+
+  const helperRequests = await page.evaluate(() => window.__dashboardHelperRequests || []);
+  const extractionRequest = helperRequests.find((request) => request.action === "extractScreener");
+  assert.equal(extractionRequest?.payload?.screenerName, editedName);
+  assert.ok(apiCalls.some((call) => call.kind === "cspForecast"));
+  assert.ok(apiCalls.some((call) => call.kind === "cspFinalize"));
+}
+
+test("Robinhood helper clicks the exact CSP screener name before extracting symbols", async () => {
+  const browser = await chromium.launch({ headless: true });
+
+  try {
+    const page = await browser.newPage();
+    await page.route("https://robinhood.com/**", (route) => route.fulfill({
+      status: 200,
+      contentType: "text/html",
+      body: robinhoodScreenerFixtureHtml()
+    }));
+    await page.goto("https://robinhood.com/?classic=1", { waitUntil: "domcontentloaded" });
+    await injectRobinhoodContentScript(page);
+
+    const result = await sendRobinhoodHelperMessage(page, {
+      action: "extractScreener",
+      screenerName: "Primary Saved Screener"
+    });
+
+    assert.equal(result.error, undefined);
+    assert.equal(result.source, "robinhood");
+    assert.match(result.url, /^https:\/\/robinhood\.com\/screener\/fixture-\d+\?source=/);
+    assert.deepEqual(result.symbols.slice(0, 5), ["AAA", "BBB", "CCC", "DDD", "EEE"]);
+    assert.deepEqual(
+      await page.evaluate(() => window.__renderedScreenerSymbols),
+      ["AAA", "BBB", "CCC", "DDD", "EEE"]
+    );
+    assert.equal(await page.evaluate(() => window.__clickedScreener), "Primary Saved Screener");
+    assert.deepEqual(
+      await page.evaluate(() => window.__clickedScreenerTarget),
+      { tagName: "SPAN", className: "css-y3z1hq" }
+    );
+    assert.equal(result.symbols.includes("XXX"), false);
+    assert.equal(result.symbols.includes("YYY"), false);
+    assert.equal(result.symbols.includes("HHH"), false);
+    assert.equal(result.symbols.includes("III"), false);
+    assert.equal(result.symbols.includes("JJJ"), false);
+    const scrollState = await page.evaluate(() => ({
+      scrollY: window.scrollY,
+      bodyWheelCount: window.__bodyWheelCount,
+      bodyWheelBeforeScreenerClick: window.__bodyWheelBeforeScreenerClick,
+      listsWheelCount: window.__listsWheelCount
+    }));
+    assert.equal(scrollState.bodyWheelBeforeScreenerClick, 0);
+  } finally {
+    await browser.close();
+  }
+});
+
+test("Robinhood helper searches the Lists panel without slowly scrolling Home", async () => {
+  const browser = await chromium.launch({ headless: true });
+
+  try {
+    const page = await browser.newPage();
+    await page.route("https://robinhood.com/**", (route) => route.fulfill({
+      status: 200,
+      contentType: "text/html",
+      body: robinhoodScreenerFixtureHtml({ targetBelowFold: true })
+    }));
+    await page.goto("https://robinhood.com/", { waitUntil: "domcontentloaded" });
+    await injectRobinhoodContentScript(page);
+
+    const result = await sendRobinhoodHelperMessage(page, {
+      action: "extractScreener",
+      screenerName: "Primary Saved Screener"
+    });
+
+    assert.equal(result.error, undefined);
+    assert.equal(result.source, "robinhood");
+    assert.deepEqual(result.symbols.slice(0, 5), ["AAA", "BBB", "CCC", "DDD", "EEE"]);
+    assert.equal(await page.evaluate(() => window.__clickedScreener), "Primary Saved Screener");
+    assert.deepEqual(
+      await page.evaluate(() => window.__clickedScreenerTarget),
+      { tagName: "SPAN", className: "css-y3z1hq" }
+    );
+    assert.equal(result.symbols.includes("HHH"), false);
+    assert.equal(result.symbols.includes("III"), false);
+    assert.equal(result.symbols.includes("JJJ"), false);
+    const scrollState = await page.evaluate(() => ({
+      scrollY: window.scrollY,
+      bodyWheelCount: window.__bodyWheelCount,
+      bodyWheelBeforeScreenerClick: window.__bodyWheelBeforeScreenerClick
+    }));
+    assert.equal(scrollState.bodyWheelBeforeScreenerClick, 0);
+  } finally {
+    await browser.close();
+  }
+});
+
+test("Robinhood helper does not extract Home symbols when the CSP screener is missing", async () => {
+  const browser = await chromium.launch({ headless: true });
+
+  try {
+    const page = await browser.newPage();
+    await page.route("https://robinhood.com/**", (route) => route.fulfill({
+      status: 200,
+      contentType: "text/html",
+      body: robinhoodScreenerFixtureHtml()
+    }));
+    await page.goto("https://robinhood.com/", { waitUntil: "domcontentloaded" });
+    await injectRobinhoodContentScript(page);
+
+    const result = await sendRobinhoodHelperMessage(page, {
+      action: "extractScreener",
+      screenerName: "Missing Saved Screener"
+    });
+
+    assert.match(result.error, /Could not find Robinhood screener named/);
+    assert.equal(await page.evaluate(() => window.__clickedScreener || null), null);
+  } finally {
+    await browser.close();
+  }
+});
+
+test("Robinhood helper reuses only an already-open matching screener", async () => {
+  const browser = await chromium.launch({ headless: true });
+
+  try {
+    const page = await browser.newPage();
+    await page.route("https://robinhood.com/**", (route) => route.fulfill({
+      status: 200,
+      contentType: "text/html",
+      body: robinhoodScreenerFixtureHtml()
+    }));
+    await page.goto("https://robinhood.com/?classic=1", { waitUntil: "domcontentloaded" });
+    await page.evaluate(() => window.renderScreener("Primary Saved Screener"));
+    await injectRobinhoodContentScript(page);
+
+    const result = await sendRobinhoodHelperMessage(page, {
+      action: "extractScreener",
+      screenerName: "Primary Saved Screener"
+    });
+
+    assert.equal(result.error, undefined);
+    assert.equal(result.retryFromHome, undefined);
+    assert.deepEqual(result.symbols.slice(0, 5), ["AAA", "BBB", "CCC", "DDD", "EEE"]);
+  } finally {
+    await browser.close();
+  }
+});
+
+test("Robinhood helper requests Home when the open screener name does not match", async () => {
+  const browser = await chromium.launch({ headless: true });
+
+  try {
+    const page = await browser.newPage();
+    await page.route("https://robinhood.com/**", (route) => route.fulfill({
+      status: 200,
+      contentType: "text/html",
+      body: robinhoodScreenerFixtureHtml()
+    }));
+    await page.goto("https://robinhood.com/?classic=1", { waitUntil: "domcontentloaded" });
+    await page.evaluate(() => window.renderScreener("Primary Saved Screener Growth"));
+    await injectRobinhoodContentScript(page);
+
+    const result = await sendRobinhoodHelperMessage(page, {
+      action: "extractScreener",
+      screenerName: "Primary Saved Screener"
+    });
+
+    assert.deepEqual(result, { retryFromHome: true });
+  } finally {
+    await browser.close();
+  }
+});
+
+test("Robinhood helper validates screener name title normalization and visible-text fallback", async () => {
+  const browser = await chromium.launch({ headless: true });
+
+  try {
+    for (const nameControlMode of ["normalized-title", "text-only"]) {
+      const page = await browser.newPage();
+      try {
+        await page.route("https://robinhood.com/**", (route) => route.fulfill({
+          status: 200,
+          contentType: "text/html",
+          body: robinhoodScreenerFixtureHtml({ nameControlMode })
+        }));
+        await page.goto("https://robinhood.com/?classic=1", { waitUntil: "domcontentloaded" });
+        await page.evaluate(() => window.renderScreener("Primary Saved Screener"));
+        await injectRobinhoodContentScript(page);
+
+        const result = await sendRobinhoodHelperMessage(page, {
+          action: "extractScreener",
+          screenerName: "Primary Saved Screener"
+        });
+
+        assert.equal(result.error, undefined);
+        assert.deepEqual(result.symbols.slice(0, 5), ["AAA", "BBB", "CCC", "DDD", "EEE"]);
+      } finally {
+        await page.close();
+      }
+    }
+  } finally {
+    await browser.close();
+  }
+});
+
+test("Robinhood helper does not validate a screener route from the sidebar label alone", async () => {
+  const browser = await chromium.launch({ headless: true });
+
+  try {
+    const page = await browser.newPage();
+    await page.route("https://robinhood.com/**", (route) => route.fulfill({
+      status: 200,
+      contentType: "text/html",
+      body: robinhoodScreenerFixtureHtml({ nameControlMode: "missing" })
+    }));
+    await page.goto("https://robinhood.com/?classic=1", { waitUntil: "domcontentloaded" });
+    await injectRobinhoodContentScript(page);
+
+    const result = await sendRobinhoodHelperMessage(page, {
+      action: "extractScreener",
+      screenerName: "Primary Saved Screener"
+    });
+
+    assert.match(result.error, /screener name could not be confirmed/);
+    assert.equal(result.symbols, undefined);
+  } finally {
+    await browser.close();
+  }
+});
+
+test("Robinhood helper refuses CSP extraction when a list click does not open a screener URL", async () => {
+  const browser = await chromium.launch({ headless: true });
+
+  try {
+    const page = await browser.newPage();
+    await page.route("https://robinhood.com/**", (route) => route.fulfill({
+      status: 200,
+      contentType: "text/html",
+      body: robinhoodScreenerFixtureHtml({ navigateOnClick: false })
+    }));
+    await page.goto("https://robinhood.com/?classic=1", { waitUntil: "domcontentloaded" });
+    await injectRobinhoodContentScript(page);
+
+    const result = await sendRobinhoodHelperMessage(page, {
+      action: "extractScreener",
+      screenerName: "Primary Saved Screener"
+    });
+
+    assert.match(result.error, /did not open its screener page/);
+    assert.equal(result.symbols, undefined);
+  } finally {
+    await browser.close();
+  }
+});
+
 test("Robinhood helper extracts CC Auto positions from Investing Stocks table", async () => {
   const browser = await chromium.launch({ headless: true });
 
@@ -679,30 +1353,44 @@ test("Robinhood helper extracts CC Auto positions from Investing Stocks table", 
     const positions = result.positions;
     assert.ok(Array.isArray(positions));
     assert.ok(positions.some((position) =>
-      position.accountName === "Individual - Personal" &&
-      position.symbol === "POET" &&
-      position.shares === 400 &&
-      position.averageCost === 12.46
+      position.accountName === "Group Alpha - Account One" &&
+      position.symbol === "AAA" &&
+      position.shares === 200 &&
+      position.averageCost === 21.55
     ));
     assert.ok(positions.some((position) =>
-      position.accountName === "Individual - Personal" &&
-      position.symbol === "RR" &&
-      position.shares === 3300 &&
-      position.averageCost === 3.81
+      position.accountName === "Group Alpha - Account One" &&
+      position.symbol === "BBB" &&
+      position.shares === 450 &&
+      position.averageCost === 13.37
     ));
     assert.ok(positions.some((position) =>
-      position.accountName === "Retirement - Roth IRA" &&
-      position.symbol === "POET" &&
+      position.accountName === "Group Alpha - Account One" &&
+      position.symbol === "CCC" &&
+      position.shares === 1250 &&
+      position.averageCost === 4.75
+    ));
+    assert.ok(positions.some((position) =>
+      position.accountName === "Group Beta - Account Two" &&
+      position.symbol === "BBB" &&
       position.shares === 125 &&
       position.averageCost === 11.11
     ));
     assert.ok(positions.some((position) =>
-      position.accountName === "Joint - Joint investing" &&
-      position.symbol === "ABC" &&
-      position.shares === 50 &&
+      position.accountName === "Group Gamma - Account Three" &&
+      position.symbol === "DDD" &&
+      position.shares === 75 &&
       position.averageCost === 7.25
     ));
-    assert.equal(positions.filter((position) => position.symbol === "POET").length, 2);
+    assert.equal(positions.filter((position) => position.symbol === "BBB").length, 2);
+
+    const clickedControls = await page.evaluate(() => window.__clickedControls);
+    assert.equal(clickedControls.some((entry) => entry.startsWith("distractor:")), false);
+    assert.ok(clickedControls.filter((entry) => entry === "control:account-dropdown").length >= 1);
+    assert.deepEqual(
+      clickedControls.filter((entry) => entry.startsWith("option:")).sort(),
+      ["option:beta", "option:gamma"]
+    );
   } finally {
     await browser.close();
   }
@@ -758,6 +1446,18 @@ test("headless smoke starts server and validates primary static routes", async (
     });
 
     await assertDashboardVisualLayout(page, baseUrl);
+    const ccAutoPage = await browser.newPage();
+    try {
+      await assertCcAutoFinalizesImportedPositions(ccAutoPage, baseUrl);
+    } finally {
+      await ccAutoPage.close();
+    }
+    const cspEditedNamePage = await browser.newPage();
+    try {
+      await assertCspAutoUsesEditedScreenerName(cspEditedNamePage, baseUrl);
+    } finally {
+      await cspEditedNamePage.close();
+    }
 
     await page.setViewportSize(DESKTOP_VIEWPORT);
     await page.goto(`${baseUrl}/home.html`, { waitUntil: "domcontentloaded" });

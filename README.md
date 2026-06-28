@@ -9,7 +9,7 @@ The site has two workflows:
 
 This is a personal/private-beta tool, not financial advice. Verify prices, option chains, collateral, assignment risk, and buying power before trading.
 
-Current private-beta release: `0.2.8`. The app version shown by `/api/version`
+Current private-beta release: `0.2.14`. The app version shown by `/api/version`
 comes from `package.json`; the Chrome helper version comes from
 `extension/manifest.json`. Keep those version values, favicon cache keys,
 `CHANGELOG.md`, and helper install copy in sync for each release.
@@ -25,7 +25,7 @@ The public site includes:
 - Learn, FAQ, Calculator, Contact, Changelog, Helper Health, Privacy Policy, and Terms of Service pages.
 - CSP screener name management plus manual CSP symbol rows stored locally.
 - JSON Settings export/import for strategy settings.
-- Helper installation, scan instructions, diagnostics export, result explanations, privacy notes, and troubleshooting.
+- Helper installation, scan instructions, CSV export, result explanations, privacy notes, and troubleshooting.
 
 All linked public pages are intentional app surfaces. They are not placeholder or orphan pages:
 the footer links and smoke tests expect the Command Center, dashboard, setup guide, helper install page,
@@ -57,11 +57,11 @@ Workflow:
 9. Return to the dashboard.
 10. Choose `CSP` or `CC`.
 11. For CSPs, keep the table toolbar on `Manual` to type symbols, or switch to `Auto` to use a saved Robinhood screener, then set portfolio value and return target.
-12. For CCs, keep `Manual` to enter rows, or switch to `Auto` to import visible stock positions from Robinhood.
+12. For CCs, keep `Manual` to enter rows, or switch to `Auto` to import visible stock positions from Robinhood Investing across every visible account.
 13. Choose `Robinhood` as the source and click `Scan`. After results exist, the same button becomes `Refresh` for a fresh read.
-14. For CSP screeners, the helper opens the matching Robinhood list and sends ticker symbols to the site. Manual CSP symbols skip this list extraction.
+14. For CSP screeners, the helper opens Robinhood Home, clicks the exact matching Robinhood screener/list name, and sends ticker symbols to the site. Manual CSP symbols skip this list extraction.
 15. The server scans TradingView for current price and analyst targets.
-16. The helper checks full default-expiration Robinhood Sell Put or Sell Call chains.
+16. The helper checks full default-expiration Robinhood Sell Put or Sell Call chains. CC Auto continues through this same Sell Call quote and finalization flow after positions are imported.
 17. The server selects qualifying strikes, sizes or summarizes the rows, and returns the table.
 
 `Scan` is the first data collection for the active strategy. `Refresh` appears after that strategy has results and rereads Robinhood, TradingView, and the relevant option chains. Changing portfolio value, covered-call average cost/contracts, or Weekly/Yearly return reuses cached scan data when possible.
@@ -71,8 +71,6 @@ Covered-call rows and manual CSP symbols are saved locally in the browser with `
 The Settings button exports/imports strategy settings only: custom CSP screeners, selected CSP screener, portfolio value, CSP weekly return, CC weekly return, active strategy, selected data source, and CSP/CC strategy source modes as `manual` or `auto`. Older settings files that contain `screener` or `robinhood` source values are imported as `auto`. Settings files intentionally exclude manual CSP symbols, covered-call rows, scan results, option quotes, imported Robinhood positions, helper status, and CSV data.
 
 The table toolbar filter appears only in `Auto` mode. `Hide unavailable and ineligible rows` is unchecked by default, so unavailable and ineligible rows remain visible unless the user chooses to hide them. CSP `SKIP` rows stay visible when the filter is enabled because they passed the TradingView target check but did not meet the selected option-return rule.
-
-After a scan, `Export Diagnostics` downloads a safe JSON bundle with app/helper version, timestamp, strategy, data source, row statuses, safe errors, option-request counts, and helper diagnostics. It does not include Robinhood cookies, credentials, account session data, contact destination emails, or email API keys.
 
 Settings also shows a release panel with the app version, Chrome helper version, and deploy timestamp. The app exposes `/healthz` for basic uptime checks and `/api/version` for safe version metadata.
 
@@ -99,7 +97,7 @@ Wheel Strategy 2
 Wheel Strategy 3
 ```
 
-These names are optional starter examples only. Users can save any Robinhood screener names in the dashboard. Saved names are stored locally in that user's browser, not globally on the website. The selected saved name must match Robinhood exactly because the helper clicks that visible screener by name. Users choose filters that fit their own strategy and risk tolerance. The project does not recommend investment filters.
+These names are optional starter examples only. Users can save any Robinhood screener names in the dashboard. Saved names are stored locally in that user's browser, not globally on the website. The selected saved name must match Robinhood exactly because the helper opens Robinhood Home and clicks that exact visible screener by name; similar longer or shorter names are not treated as matches. Users choose filters that fit their own strategy and risk tolerance. The project does not recommend investment filters.
 
 Robinhood references:
 
@@ -129,8 +127,13 @@ Private beta install:
 5. Enable `Developer mode`.
 6. Click `Load unpacked`.
 7. Select the extracted helper folder.
-8. Confirm Chrome shows helper version `0.2.8`.
+8. Confirm Chrome shows helper version `0.2.14`.
 9. Reload the screener page.
+
+Every live Scan or Refresh brings the Robinhood tab and its Chrome window to the foreground.
+CSP Auto uses the currently selected saved screener name and does not read symbols until the
+helper has confirmed the matching Robinhood `/screener/...` page. CC Auto opens the Investing
+page before importing positions.
 
 The download at `/downloads/wheel-screener-helper.zip` is built by the Node
 server from the repository's `extension/` directory at request time. If
@@ -140,7 +143,7 @@ do not expect an old extracted helper folder to update itself.
 Helper Health:
 
 1. Open `https://wheelstrategyscreener.com/helper-health.html`.
-2. Confirm the extension bridge answers with helper version `0.2.8`.
+2. Confirm the extension bridge answers with helper version `0.2.14`.
 3. Confirm the app server health check is green.
 4. For CC Auto, keep Robinhood on `https://robinhood.com/account/investing` so the route check is green before scanning.
 5. If a check fails, reload the helper in `chrome://extensions`, refresh the page, and check Docker logs if the app server check fails.
@@ -414,7 +417,7 @@ Release checklist:
 9. Check `docker compose ps`, `docker compose logs --tail=80 app`, `/healthz`, and `/api/version`.
 10. Download and reload the Chrome helper if `extension/` changed.
 11. Submit a Contact Us test and confirm Resend delivery.
-12. Manually verify CSP Manual, CSP Auto, CC Manual, CC Auto, diagnostics export, Helper Health, and the primary public routes.
+12. Manually verify CSP Manual, CSP Auto, CC Manual, CC Auto, CSV export, Helper Health, and the primary public routes.
 
 After any extension change, update the Chrome helper too:
 
@@ -425,7 +428,7 @@ After any extension change, update the Chrome helper too:
 5. Find `Wheel Strategy Screener Helper`.
 6. Click reload if it points to the extracted updated folder, or remove it and click `Load unpacked`.
 7. Select the newly extracted helper folder.
-8. Confirm Chrome shows helper version `0.2.8`.
+8. Confirm Chrome shows helper version `0.2.14`.
 9. Refresh `https://wheelstrategyscreener.com`.
 
 Manual deployment verification:
@@ -435,7 +438,7 @@ Manual deployment verification:
 - Submit a Contact Us test and confirm the destination inbox receives it through Resend.
 - In Mock mode, run CSP Manual and CC Manual scans.
 - With the helper loaded, verify CSP Auto, CC Auto, and option-chain Refresh on Robinhood.
-- After any scan, click `Export Diagnostics` and confirm the JSON contains row statuses but no private email, cookies, passwords, or API keys.
+- After a scan, click `Export CSV` and confirm the downloaded rows match the visible table.
 
 Rollback notes:
 
@@ -451,7 +454,6 @@ Lightweight monitoring:
 - Check `https://wheelstrategyscreener.com/healthz` after every deploy and periodically while the VPS is running.
 - Check `docker compose logs --tail=120 app` for safe Resend errors, API exceptions, or repeated scan failures.
 - Submit a short Contact Us canary message after contact or environment changes.
-- Use diagnostics exports when Robinhood extraction or option-chain reads look wrong; they are meant to reduce screenshot-only debugging.
 - Keep `/changelog.html` and `CHANGELOG.md` updated whenever the helper or dashboard behavior changes.
 
 ## Current Completion Status
@@ -462,7 +464,7 @@ Production-ready private-beta pieces:
 - CSP Manual/Auto and CC Manual/Auto flows exist and are covered by API/static tests.
 - Contact Us uses Resend over HTTPS only, with private destination email in server env.
 - The Chrome helper stays local to Chrome and does not request debugger permission.
-- Release metadata, health endpoints, diagnostics export, helper install/update flow, and rollback notes are documented.
+- Release metadata, health endpoints, helper install/update flow, CSV export, and rollback notes are documented.
 - Public pages are linked, smoke-tested, and intentionally retained.
 - Docker/Caddy deployment is documented for the current VPS setup.
 
@@ -476,7 +478,7 @@ Completion criteria for each release:
 - Mobile viewport checks show no horizontal overflow on the primary public routes at `320px` and normal phone widths.
 - VPS `.env` uses only current Resend contact variables: `CONTACT_TO_EMAIL`, `CONTACT_FROM_EMAIL`, and `RESEND_API_KEY`.
 - Docker rebuild/recreate works, `/healthz` is healthy, the helper ZIP downloads, and the helper reload is verified.
-- Manual browser verification covers CSP Manual, CSP Auto, CC Manual, CC Auto, Contact Us, Helper Health, diagnostics export, and primary static routes.
+- Manual browser verification covers CSP Manual, CSP Auto, CC Manual, CC Auto, Contact Us, Helper Health, CSV export, and primary static routes.
 
 Future chatbot boundary:
 

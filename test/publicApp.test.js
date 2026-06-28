@@ -283,6 +283,12 @@ test("new resource pages contain current workflow, legal, and calculator content
   assert.match(helperHealthScript, /requestExtension\("status"/);
   assert.match(helperHealthScript, /fetch\("\/healthz"/);
   assert.match(helperHealthScript, /onInvestingPage/);
+  assert.match(changelog, /0\.2\.14 - Authoritative CSP Screener Name Validation/);
+  assert.match(changelog, /0\.2\.13 - Restored CSP Screener Symbol Extraction/);
+  assert.match(changelog, /0\.2\.12 - Direct CSP Screener Label Click/);
+  assert.match(changelog, /0\.2\.11 - Reliable Robinhood Scan Handoff/);
+  assert.match(changelog, /0\.2\.10 - Faster CSP Auto List Selection/);
+  assert.match(changelog, /0\.2\.9 - Robinhood Auto Extraction Repair/);
   assert.match(changelog, /0\.2\.8 - Private-Beta Completion/);
   assert.match(changelog, /Helper-breaking/);
   assert.match(changelog, /Command Center/);
@@ -322,7 +328,7 @@ test("public asset cache version matches the current helper version", () => {
   for (const file of htmlFiles) {
     const html = fs.readFileSync(path.join(publicDir, file), "utf8");
     assert.doesNotMatch(html, /\?v=0\.2\.6/, `${file} has a stale asset version`);
-    assert.match(html, /\?v=0\.2\.8/, `${file} should use the current asset version`);
+    assert.match(html, /\?v=0\.2\.14/, `${file} should use the current asset version`);
   }
 });
 
@@ -391,8 +397,8 @@ test("health and version endpoints expose safe release metadata", async () => {
     assert.equal(health.ok, true);
     assert.equal(health.app, "wheel-strategy-screener");
     assert.equal(version.app, "wheel-strategy-screener");
-    assert.equal(version.appVersion, "0.2.8");
-    assert.equal(version.helperVersion, "0.2.8");
+    assert.equal(version.appVersion, "0.2.14");
+    assert.equal(version.helperVersion, "0.2.14");
     assert.equal(typeof health.uptimeSeconds, "number");
     assert.doesNotMatch(JSON.stringify(health), /RESEND|CONTACT_TO_EMAIL|legendharsh21@gmail\.com/);
     assert.doesNotMatch(JSON.stringify(version), /RESEND|CONTACT_TO_EMAIL|legendharsh21@gmail\.com/);
@@ -694,8 +700,8 @@ test("dashboard title and filtered SKIP rows match current UI rules", () => {
   assert.match(css, /\.connection-subtitle-row\s*\{/);
   assert.match(css, /\.session-pill\.missing\s*\{[\s\S]*?background:\s*#fff7d8/);
   assert.match(css, /\.connection-disclosure\s*\{/);
-  assert.match(index, /href="\/favicon\.ico\?v=0\.2\.8"/);
-  assert.match(index, /href="\/favicon-32\.png\?v=0\.2\.8"/);
+  assert.match(index, /href="\/favicon\.ico\?v=0\.2\.14"/);
+  assert.match(index, /href="\/favicon-32\.png\?v=0\.2\.14"/);
   assert.doesNotMatch(index, /class="brand-logo"/);
   assert.match(index, /Install the Chrome helper to scan Robinhood screeners, positions, and option chains\./);
   assert.match(index, /reads screener symbols, stock positions, and option-chain quotes only/);
@@ -817,26 +823,29 @@ test("dashboard exposes CSP and CC source modes", () => {
   assert.match(appSource, /hideUnavailableControl\.hidden = !isActiveAutoMode\(\)/);
 });
 
-test("dashboard exposes release metadata and safe diagnostics export", () => {
+test("dashboard exposes release metadata without the removed JSON export", () => {
   const dashboard = fs.readFileSync(path.resolve(__dirname, "../src/public/dashboard.html"), "utf8");
   const appSource = fs.readFileSync(path.resolve(__dirname, "../src/public/app.js"), "utf8");
   const css = fs.readFileSync(path.resolve(__dirname, "../src/public/styles.css"), "utf8");
+  const removedButtonId = ["diagnostics", "Button"].join("");
+  const removedButtonLabel = ["Export", "Diagnostics"].join(" ");
+  const removedBuildFunction = ["build", "Diagnostics", "Export"].join("");
+  const removedExportFunction = ["export", "Diagnostics"].join("");
+  const removedFilePrefix = ["wheel-screener", "diagnostics"].join("-");
+  const removedCssClass = [".", "diagnostics", "-button"].join("");
 
-  assert.match(dashboard, /id="diagnosticsButton"/);
-  assert.match(dashboard, /Export Diagnostics/);
+  assert.doesNotMatch(dashboard, new RegExp(`id="${removedButtonId}"`));
+  assert.doesNotMatch(dashboard, new RegExp(removedButtonLabel));
   assert.match(dashboard, /class="release-panel"/);
   assert.match(dashboard, /id="appVersionLabel"/);
   assert.match(dashboard, /id="helperVersionLabel"/);
   assert.match(dashboard, /id="deployedAtLabel"/);
   assert.match(appSource, /async function loadVersionInfo/);
   assert.match(appSource, /fetchJson\("\/api\/version"\)/);
-  assert.match(appSource, /function buildDiagnosticsExport/);
-  assert.match(appSource, /function exportDiagnostics/);
-  assert.match(appSource, /helperDiagnostics: safeDiagnosticsBySymbol/);
-  assert.match(appSource, /optionRequestCount/);
-  assert.match(appSource, /wheel-screener-diagnostics-\$\{state\.strategy\}/);
-  assert.doesNotMatch(appSource.match(/function buildDiagnosticsExport\(\)[\s\S]*?\n\}/)?.[0] || "", /CONTACT_TO_EMAIL|RESEND_API_KEY|cookie|password/i);
-  assert.match(css, /\.diagnostics-button/);
+  assert.doesNotMatch(appSource, new RegExp(`function ${removedBuildFunction}`));
+  assert.doesNotMatch(appSource, new RegExp(`function ${removedExportFunction}`));
+  assert.doesNotMatch(appSource, new RegExp(removedFilePrefix));
+  assert.doesNotMatch(css, new RegExp(removedCssClass.replace(".", "\\.")));
   assert.match(css, /\.release-panel/);
 });
 
@@ -886,21 +895,21 @@ test("custom CSP screeners use standard mock symbols when they are not starter d
     mode: "mock",
     portfolioValue: 10000,
     optionQuotesBySymbol: {
-      TMC: [{ strike: 5, bid: 0.2 }]
+      FFF: [{ strike: 5, bid: 0.2 }]
     },
     forecastFetcher: async (symbol) => ({
       symbol,
       status: "ok",
       currentPrice: 5,
-      minTarget: symbol === "TMC" ? 6 : 4,
+      minTarget: symbol === "FFF" ? 6 : 4,
       averageTarget: 8,
       maxTarget: 10,
-      eligible: symbol === "TMC"
+      eligible: symbol === "FFF"
     })
   });
 
   assert.equal(result.screener.name, "My Breakout Screener");
-  assert.ok(result.symbols.includes("TMC"));
+  assert.ok(result.symbols.includes("FFF"));
 });
 
 test("dashboard persists manual rows in local storage only", () => {
@@ -1056,18 +1065,18 @@ test("live scan accepts Chrome extension provided Robinhood symbols", async () =
         mode: "live",
         screenerId: "safe",
         portfolioValue: 10000,
-        symbols: ["ONDS", "RGTI"],
+        symbols: ["AAA", "BBB"],
         source: "robinhood",
         optionQuotesBySymbol: {
-          ONDS: [{ strike: 9, bid: 0.2 }],
-          RGTI: [{ strike: 9, bid: 0.2 }]
+          AAA: [{ strike: 9, bid: 0.2 }],
+          BBB: [{ strike: 9, bid: 0.2 }]
         }
       })
     }).then((response) => response.json());
 
     assert.equal(run.mode, "live");
     assert.equal(run.source, "robinhood");
-    assert.deepEqual(run.symbols, ["ONDS", "RGTI"]);
+    assert.deepEqual(run.symbols, ["AAA", "BBB"]);
     assert.equal(run.eligibleCount, 2);
   } finally {
     await close(server);
@@ -1308,8 +1317,8 @@ test("covered-call API dedupes option requests while preserving duplicate rows",
       body: JSON.stringify({
         mode: "live",
         positions: [
-          { symbol: "ONDS", averageCost: 12, contracts: 2 },
-          { symbol: "onds", averageCost: 14, contracts: 1 }
+          { symbol: "AAA", averageCost: 12, contracts: 2 },
+          { symbol: "aaa", averageCost: 14, contracts: 1 }
         ]
       })
     }).then((response) => response.json());
@@ -1317,7 +1326,7 @@ test("covered-call API dedupes option requests while preserving duplicate rows",
     assert.equal(forecast.rows.length, 2);
     assert.deepEqual(forecast.optionRequests, [
       {
-        symbol: "ONDS",
+        symbol: "AAA",
         currentPrice: 15,
         averageCost: 12
       }
@@ -1330,7 +1339,7 @@ test("covered-call API dedupes option requests while preserving duplicate rows",
         result: forecast,
         minCspReturnDecimal: 0.02,
         optionQuotesBySymbol: {
-          ONDS: [
+          AAA: [
             { strike: 16, bid: 0.3 },
             { strike: 18, bid: 0.4 }
           ]
@@ -1375,17 +1384,17 @@ test("covered-call API requests options when forecast targets are unavailable", 
       headers: { "content-type": "application/json" },
       body: JSON.stringify({
         mode: "live",
-        positions: [{ symbol: "RR", averageCost: 3.81, contracts: 33 }]
+        positions: [{ symbol: "AAA", averageCost: 3.81, contracts: 33 }]
       })
     }).then((response) => response.json());
 
-    assert.equal(forecast.rows[0].symbol, "RR");
+    assert.equal(forecast.rows[0].symbol, "AAA");
     assert.equal(forecast.rows[0].currentPrice, 2.4);
     assert.equal(forecast.rows[0].minTarget, null);
     assert.equal(forecast.rows[0].warning, "TradingView analyst targets were unavailable; using current price only.");
     assert.deepEqual(forecast.optionRequests, [
       {
-        symbol: "RR",
+        symbol: "AAA",
         currentPrice: 2.4,
         averageCost: 3.81
       }
@@ -1712,17 +1721,17 @@ test("covered call scan preserves blank rows before populated rows", async () =>
         mode: "live",
         positions: [
           { symbol: "", averageCost: "", contracts: "" },
-          { symbol: "POET", averageCost: 12.24, contracts: 4 }
+          { symbol: "AAA", averageCost: 12.24, contracts: 4 }
         ]
       })
     }).then((response) => response.json());
 
     assert.equal(forecast.rows.length, 1);
     assert.equal(forecast.rows[0].order, 2);
-    assert.equal(forecast.rows[0].symbol, "POET");
+    assert.equal(forecast.rows[0].symbol, "AAA");
     assert.deepEqual(forecast.optionRequests, [
       {
-        symbol: "POET",
+        symbol: "AAA",
         currentPrice: 11.68,
         averageCost: 12.24
       }
@@ -1735,7 +1744,7 @@ test("covered call scan preserves blank rows before populated rows", async () =>
         result: forecast,
         minCspReturnDecimal: 0.02,
         optionQuotesBySymbol: {
-          POET: [{ strike: 14, bid: 0.35 }]
+          AAA: [{ strike: 14, bid: 0.35 }]
         }
       })
     }).then((response) => response.json());
@@ -1856,11 +1865,11 @@ test("run refresh bypasses cached TradingView forecast data", async () => {
         mode: "live",
         screenerId: "safe",
         portfolioValue: 10000,
-        symbols: ["ONDS", "RGTI"],
+        symbols: ["AAA", "BBB"],
         source: "robinhood",
         optionQuotesBySymbol: {
-          ONDS: [{ strike: 9, bid: 0.2 }],
-          RGTI: [{ strike: 9, bid: 0.2 }]
+          AAA: [{ strike: 9, bid: 0.2 }],
+          BBB: [{ strike: 9, bid: 0.2 }]
         }
       })
     }).then((response) => response.json());
@@ -1890,7 +1899,7 @@ test("Chrome helper does not request debugger permission", () => {
     fs.readFileSync(path.resolve(__dirname, "../extension/manifest.json"), "utf8")
   );
 
-  assert.equal(manifest.version, "0.2.8");
+  assert.equal(manifest.version, "0.2.14");
   assert.ok(!manifest.permissions.includes("debugger"));
 });
 
@@ -1905,6 +1914,10 @@ test("Chrome helper wires option quote extraction action", () => {
   assert.match(background, /extractPutOptionQuotes/);
   assert.match(background, /extractCallOptionQuotes/);
   assert.match(background, /extractStockPositions/);
+  assert.match(background, /prepareRobinhoodScan/);
+  assert.match(background, /chrome\.windows\.update\(tab\.windowId, \{ focused: true \}/);
+  assert.match(background, /url:\s*"https:\/\/robinhood\.com\/"/);
+  assert.match(background, /"https:\/\/robinhood\.com\/account\/investing"/);
   assert.match(background, /async function helperStatus/);
   assert.match(background, /message\?\.action === "status"/);
   assert.match(background, /onInvestingPage/);
@@ -1918,10 +1931,31 @@ test("Chrome helper wires option quote extraction action", () => {
   assert.match(contentRobinhood, /accountOptionDescriptors/);
   assert.match(contentRobinhood, /collectStockPositionsForAccount/);
   assert.match(contentRobinhood, /clickAccountOption/);
+  assert.match(contentRobinhood, /sameNormalizedText/);
+  assert.match(contentRobinhood, /findListsContainers\(listName\)/);
+  assert.match(contentRobinhood, /exactListRowsInContainer\(container, listName\)/);
+  assert.match(contentRobinhood, /exactListLabelElements\(container, listName\)/);
+  assert.match(contentRobinhood, /div\.web-app-emotion-cache-8uhtka > span\.css-y3z1hq/);
+  assert.match(contentRobinhood, /clickExactListLabel\(label\)/);
+  assert.match(contentRobinhood, /waitForOpenedList\(listName\)/);
+  assert.match(contentRobinhood, /robinhoodScreenerPath\(\)/);
+  assert.match(contentRobinhood, /button\[data-testid="screener-name-input"\]/);
+  assert.match(contentRobinhood, /function screenerNameFromControl/);
+  assert.match(contentRobinhood, /getAttribute\?\.\("title"\)/);
+  assert.match(contentRobinhood, /waitForOpenedList\(listName, timeoutMs = 15000\)/);
+  assert.doesNotMatch(contentRobinhood, /function openedListHeading/);
+  assert.match(contentRobinhood, /retryFromHome/);
+  assert.match(contentRobinhood, /Could not confirm Robinhood screener/);
+  const openedRootHelper = contentRobinhood.match(/function openedListRoot\(listName\) \{[\s\S]*?\n  \}/)?.[0] || "";
+  assert.match(openedRootHelper, /nameControl\.closest\("\[role='main'\], main"\)/);
+  assert.doesNotMatch(openedRootHelper, /main, section/);
+  assert.match(contentRobinhood, /accountOptionIsSelected/);
+  assert.match(contentRobinhood, /scrollToStocksHeading/);
   assert.match(contentRobinhood, /parseShares/);
   assert.match(contentRobinhood, /parseAverageCost/);
   assert.match(contentRobinhood, /gic1rUwO9ldk9zzcggr7uA/);
   assert.match(contentRobinhood, /URCNCRkOrsFeQ6BHrJU3Q/);
+  assert.match(contentRobinhood, /sTkTMJqe3B7iJLnJngmcMA/);
   assert.match(contentRobinhood, /CC Auto can import Robinhood stock positions only from https:\/\/robinhood\.com\/account\/investing/);
   assert.match(contentRobinhood, /ensureOptionSide\(symbol, "sell"\)/);
   assert.match(contentRobinhood, /ensureOptionMode\(symbol, "sell", normalizedType\)/);
@@ -1952,6 +1986,8 @@ test("Chrome helper wires option quote extraction action", () => {
   assert.match(appSource, /\/api\/covered-calls\/forecast/);
   assert.match(appSource, /\/api\/covered-calls\/finalize/);
   assert.match(appSource, /requestExtension\("extractStockPositions"/);
+  assert.match(appSource, /"prepareRobinhoodScan"/);
+  assert.match(appSource, /"extractScreener"[\s\S]*?screenerName: screener\?\.name/);
   assert.match(appSource, /Math\.floor\(shares \/ 100\)/);
 });
 
@@ -1966,9 +2002,9 @@ test("guide documents both strategy workflows and return rules", () => {
   assert.match(guide, /Auto only imports from <code>robinhood\.com\/account\/investing<\/code>/);
   assert.match(guide, /Hide unavailable and ineligible rows/);
   assert.match(guide, /Older settings files/);
-  assert.match(guide, /Contact form and support email/);
-  assert.match(guide, /Resend's HTTPS email API/);
-  assert.match(guide, /RESEND_API_KEY/);
+  assert.match(guide, /Contact support/);
+  assert.match(guide, /Do not send Robinhood passwords/);
+  assert.doesNotMatch(guide, /docker|Caddy|VPS|CONTACT_TO_EMAIL|CONTACT_FROM_EMAIL|RESEND_API_KEY|\.env|node_modules|scripts\/|Developer and deployment|\/healthz|\/api\/version|Resend|environment variables/i);
   assert.match(guide, /floor\(shares \/ 100\)/);
   assert.match(guide, /Wheel Strategy 1/);
   assert.match(guide, /Wheel Strategy 3/);

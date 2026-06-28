@@ -8,10 +8,10 @@
       content="Setup guide for the Wheel Strategy Screener Chrome helper, Robinhood screeners, covered calls, and option chains."
     />
     <title>Setup Guide - Wheel Strategy Screener</title>
-    <link rel="icon" href="/favicon.ico?v=0.2.8" sizes="any" />
-    <link rel="icon" href="/favicon-32.png?v=0.2.8" sizes="32x32" type="image/png" />
-    <link rel="icon" href="/favicon-16.png?v=0.2.8" sizes="16x16" type="image/png" />
-    <link rel="apple-touch-icon" href="/apple-touch-icon.png?v=0.2.8" />
+    <link rel="icon" href="/favicon.ico?v=0.2.14" sizes="any" />
+    <link rel="icon" href="/favicon-32.png?v=0.2.14" sizes="32x32" type="image/png" />
+    <link rel="icon" href="/favicon-16.png?v=0.2.14" sizes="16x16" type="image/png" />
+    <link rel="apple-touch-icon" href="/apple-touch-icon.png?v=0.2.14" />
     <link rel="stylesheet" href="/styles.css" />
   </head>
   <body>
@@ -63,9 +63,9 @@
           without auto-resume.
         </div>
         <div class="guide-callout neutral">
-          Current private-beta release: app <code>0.2.8</code> and helper <code>0.2.8</code>.
-          The dashboard Settings panel reads app metadata from <code>/api/version</code>, while
-          Chrome shows the helper version from the loaded extension manifest.
+          Current private-beta release: app <code>0.2.14</code> and helper <code>0.2.14</code>.
+          The dashboard Settings panel shows the app version, and Chrome shows the helper version
+          from the loaded extension details.
         </div>
       </section>
 
@@ -84,7 +84,7 @@
           <li>Open the <a class="text-link" href="/helper.html">helper download page</a> and download the ZIP.</li>
           <li>Extract the ZIP into a folder you can keep.</li>
           <li>Open <code>chrome://extensions</code>, turn on <strong>Developer mode</strong>, click <strong>Load unpacked</strong>, and select the extracted folder.</li>
-          <li>Confirm Chrome shows helper version <code>0.2.8</code>, then reload the screener dashboard page.</li>
+          <li>Confirm Chrome shows helper version <code>0.2.14</code>, then reload the screener dashboard page.</li>
           <li>Open <a class="text-link" href="/helper-health.html">Helper Health</a> if the dashboard does not detect the helper or if CC Auto needs route verification.</li>
           <li>Click <strong>Open Robinhood</strong>, log in directly at <a class="text-link" href="https://robinhood.com/" target="_blank" rel="noreferrer">robinhood.com</a> in Chrome, and keep that tab open during scans.</li>
           <li>Select <strong>Mock</strong> to test the dashboard without Robinhood, or select <strong>Robinhood</strong> for a real scan.</li>
@@ -167,7 +167,7 @@
         <p class="guide-footnote">
           These three names are starter examples only. You can add, rename, delete, and select saved
           screeners locally in your browser. They are not saved globally on the website. The selected saved name must match the Robinhood
-          screener exactly because the Chrome helper clicks that visible list by name.
+          screener exactly because the Chrome helper starts from Robinhood Home and clicks that exact visible list by name. Similar longer or shorter list names are not treated as matches.
           This guide does not recommend investment filters.
         </p>
         <p class="guide-footnote">
@@ -197,6 +197,13 @@
           <li>Set Weekly or Yearly return target. CSP defaults to 1% weekly, compounded over 52 weeks for the Yearly display.</li>
           <li>Click <strong>Scan</strong> the first time. After results exist, click <strong>Refresh</strong> whenever you want a fresh Robinhood, TradingView, and Sell Put read.</li>
         </ol>
+
+        <div class="guide-callout neutral">
+          A live Scan or Refresh brings the Robinhood tab forward. In Auto mode, the helper uses
+          the currently selected screener name, opens its matching Robinhood
+          <code>/screener/...</code> page, and only then reads symbols. If a different screener is
+          open, the helper returns to Home and selects the configured name again.
+        </div>
 
         <div class="guide-callout neutral">
           CSP eligibility starts with TradingView: the minimum analyst target must be above the
@@ -290,7 +297,9 @@
           columns for every visible account the helper can select from the account dropdown,
           including Individual, Retirement, Joint, or any other account group Robinhood shows.
           Contract count is <code>floor(shares / 100)</code>. Rows below 100 shares remain visible
-          with 0 contracts, but they are not used for Sell Call option-chain reads.
+          with 0 contracts, but they are not used for Sell Call option-chain reads. After import,
+          CC Auto continues through the same TradingView forecast, Robinhood Sell Call quote,
+          and finalization flow used by Manual CC.
         </div>
 
         <div class="guide-callout neutral">
@@ -375,66 +384,24 @@
         </div>
       </section>
 
-      <section class="guide-section" aria-labelledby="release-diagnostics">
-        <div class="guide-section-heading">
-          <p class="step-kicker">Operations</p>
-          <h2 id="release-diagnostics">Release, health, and diagnostics</h2>
-          <p>
-            The dashboard includes a small release panel in Settings and a diagnostics export after
-            scans so local issues can be debugged without sharing screenshots of every row.
-          </p>
-        </div>
-        <dl class="glossary-grid">
-          <div><dt>Release panel</dt><dd>Settings shows app version, helper version, and deploy timestamp from the safe <code>/api/version</code> endpoint.</dd></div>
-          <div><dt>Health endpoint</dt><dd><code>/healthz</code> returns basic uptime and version metadata without secrets.</dd></div>
-          <div><dt>Diagnostics export</dt><dd>After a scan, <strong>Export Diagnostics</strong> downloads safe JSON with row statuses, option-request counts, helper diagnostics, and no cookies, passwords, private contact destination, or API keys.</dd></div>
-          <div><dt>Changelog</dt><dd><a class="text-link" href="/changelog.html">Changelog</a> marks helper-breaking updates so users know when to reload the Chrome helper.</dd></div>
-          <div><dt>Public routes</dt><dd>The Command Center, dashboard, guide, helper install, Helper Health, changelog, learn, FAQ, calculator, contact, privacy, and terms pages are all intentional app surfaces.</dd></div>
-          <div><dt>Mobile layout</dt><dd>Primary pages should remain usable on narrow phone, normal phone, tablet, and desktop widths with no horizontal page overflow.</dd></div>
-        </dl>
-      </section>
-
-      <section class="guide-section" aria-labelledby="operator-notes">
-        <div class="guide-section-heading">
-          <p class="step-kicker">Operations</p>
-          <h2 id="operator-notes">Developer and deployment notes</h2>
-          <p>
-            The project is a plain Node HTTP server with static public assets. There is no
-            frontend bundler or separate build step; deployment copies the current repository
-            files and rebuilds the Docker app behind Caddy.
-          </p>
-        </div>
-        <dl class="glossary-grid">
-          <div><dt>Local scripts</dt><dd><code>scripts/start.ps1</code>, <code>scripts/stop.ps1</code>, and <code>scripts/test.ps1</code> run the app and tests, preferring the bundled Codex Node runtime when present.</dd></div>
-          <div><dt>Dependencies</dt><dd><code>playwright</code> is the only dev dependency and is used by the route smoke and mobile verification tests.</dd></div>
-          <div><dt>Generated artifacts</dt><dd><code>node_modules/</code>, <code>.server.pid</code>, server logs, npm debug logs, and local <code>.env</code> files are workspace artifacts and should stay out of commits.</dd></div>
-          <div><dt>Deployment</dt><dd><code>docker-compose.yml</code> builds the Node app and runs Caddy from <code>deploy/Caddyfile</code> for HTTPS reverse proxying.</dd></div>
-          <div><dt>Release metadata</dt><dd>Keep <code>package.json</code>, <code>extension/manifest.json</code>, favicon cache keys, helper copy, and changelog entries synchronized for each release.</dd></div>
-          <div><dt>Verification</dt><dd>Run syntax checks, the PowerShell test script, smoke tests, and mobile viewport checks before deploying a release.</dd></div>
-        </dl>
-      </section>
-
       <section class="guide-section" aria-labelledby="contact-support">
         <div class="guide-section-heading">
           <p class="step-kicker">Support</p>
-          <h2 id="contact-support">Contact form and support email</h2>
+          <h2 id="contact-support">Contact support</h2>
           <p>
-            The Contact Us page sends private setup questions, helper issues, and workflow
-            feedback through the server. The destination address is configured in private
-            environment variables and is not shown in public HTML.
+            Use the Contact Us page for setup questions, helper issues, and workflow feedback.
+            Include the strategy you were using, whether you selected Manual or Auto, and what
+            happened after Scan or Refresh.
           </p>
         </div>
         <dl class="glossary-grid">
-          <div><dt>Delivery provider</dt><dd>The server sends contact messages through Resend's HTTPS email API.</dd></div>
-          <div><dt>Required env</dt><dd><code>CONTACT_TO_EMAIL</code>, <code>CONTACT_FROM_EMAIL</code>, and <code>RESEND_API_KEY</code>.</dd></div>
-          <div><dt>Sender address</dt><dd><code>CONTACT_FROM_EMAIL</code> must use a sender or domain verified in Resend.</dd></div>
-          <div><dt>Missing config</dt><dd>The Contact page shows a setup message instead of silently dropping messages.</dd></div>
+          <div><dt>Best detail</dt><dd>Mention CSP or CC, Manual or Auto, Mock or Robinhood source, and the symbol or row that looked wrong.</dd></div>
+          <div><dt>Helper issues</dt><dd>Check <a class="text-link" href="/helper-health.html">Helper Health</a> first, then include the helper status if you send a message.</dd></div>
+          <div><dt>Contact form issue</dt><dd>If the Contact Us form cannot send, wait a bit and try again later.</dd></div>
         </dl>
         <div class="guide-callout neutral">
-          After changing contact environment variables on the VPS, rebuild or recreate the app
-          container and submit a test message from <a class="text-link" href="/contact.html">Contact Us</a>.
-          If sending fails, check <code>docker compose logs --tail=120 app</code> for the safe
-          Resend error code.
+          The contact form is for website support only. Do not send Robinhood passwords, MFA
+          codes, cookies, full account numbers, or screenshots that reveal private account details.
         </div>
       </section>
 

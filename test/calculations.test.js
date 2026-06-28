@@ -240,7 +240,7 @@ test("covered call finalization can use current-only TradingView rows", () => {
   const rows = applyCoveredCallSelections(
     [
       {
-        symbol: "RR",
+        symbol: "BBB",
         status: "ok",
         currentPrice: 2.4,
         minTarget: null,
@@ -252,7 +252,7 @@ test("covered call finalization can use current-only TradingView rows", () => {
       }
     ],
     {
-      RR: [
+      BBB: [
         { strike: 4, bid: 0.1 },
         { strike: 4.5, bid: 0.02 }
       ]
@@ -269,7 +269,7 @@ test("covered call finalization falls back to average cost when current price is
   const rows = applyCoveredCallSelections(
     [
       {
-        symbol: "RR",
+        symbol: "BBB",
         status: "missing-current",
         currentPrice: null,
         averageCost: 3.81,
@@ -279,7 +279,7 @@ test("covered call finalization falls back to average cost when current price is
       }
     ],
     {
-      RR: [{ strike: 4, bid: 0.1 }]
+      BBB: [{ strike: 4, bid: 0.1 }]
     },
     0.02
   );
@@ -293,7 +293,7 @@ test("covered call finalization falls back to average cost when current price is
 test("covered call option requests include rows without TradingView current price", () => {
   const requests = callOptionRequestsForRows([
     {
-      symbol: "RR",
+      symbol: "BBB",
       status: "missing-current",
       currentPrice: null,
       averageCost: 3.81
@@ -308,7 +308,7 @@ test("covered call option requests include rows without TradingView current pric
 
   assert.deepEqual(requests, [
     {
-      symbol: "RR",
+      symbol: "BBB",
       currentPrice: null,
       averageCost: 3.81
     }
@@ -318,17 +318,17 @@ test("covered call option requests include rows without TradingView current pric
 test("covered call option requests dedupe duplicate symbols", () => {
   const requests = callOptionRequestsForRows([
     {
-      symbol: "onds",
+      symbol: "aaa",
       currentPrice: null,
       averageCost: 12.2
     },
     {
-      symbol: "ONDS",
+      symbol: "AAA",
       currentPrice: 10.23,
       averageCost: 15.5
     },
     {
-      symbol: "QUBT",
+      symbol: "CCC",
       currentPrice: 9.91,
       averageCost: 8
     }
@@ -336,12 +336,12 @@ test("covered call option requests dedupe duplicate symbols", () => {
 
   assert.deepEqual(requests, [
     {
-      symbol: "ONDS",
+      symbol: "AAA",
       currentPrice: 10.23,
       averageCost: 12.2
     },
     {
-      symbol: "QUBT",
+      symbol: "CCC",
       currentPrice: 9.91,
       averageCost: 8
     }
@@ -351,13 +351,13 @@ test("covered call option requests dedupe duplicate symbols", () => {
 test("CSP option requests dedupe duplicate eligible symbols", () => {
   const requests = optionRequestsForRows([
     {
-      symbol: "onds",
+      symbol: "aaa",
       status: "ok",
       forecastEligible: true,
       currentPrice: 10.2
     },
     {
-      symbol: "ONDS",
+      symbol: "AAA",
       status: "ok",
       forecastEligible: true,
       currentPrice: 10.3
@@ -372,13 +372,13 @@ test("CSP option requests dedupe duplicate eligible symbols", () => {
 
   assert.deepEqual(requests, [
     {
-      symbol: "ONDS",
+      symbol: "AAA",
       currentPrice: 10.2
     }
   ]);
 });
 
-test("ONDS cached quote chain preserves known-good CSP behavior", () => {
+test("generic cached quote chain preserves known-good CSP behavior", () => {
   const quotes = [
     { strike: 7.5, bid: 0.01 },
     { strike: 8, bid: 0.03 },
@@ -398,7 +398,7 @@ test("ONDS cached quote chain preserves known-good CSP behavior", () => {
   assert.equal(twoPercent.cspReturnPercent, 3.4000000000000004);
 });
 
-test("CLSK-style cached chain selects a qualifying below-current sell put", () => {
+test("mid-price cached chain selects a qualifying below-current sell put", () => {
   const selected = selectCspQuote(
     15.35,
     [
@@ -415,7 +415,7 @@ test("CLSK-style cached chain selects a qualifying below-current sell put", () =
   assert.equal(selected.cspReturnPercent, (0.4 / 14.5) * 100);
 });
 
-test("QUBT-style cached chain responds to return target changes", () => {
+test("return-sensitive cached chain responds to return target changes", () => {
   const quotes = [
     { strike: 10, bid: 0.54 },
     { strike: 9.5, bid: 0.3 },
@@ -596,22 +596,22 @@ test("rounds contracts close to allocation without exceeding portfolio value", (
 test("removes zero-contract rows and recalculates allocation using only used rows", () => {
   const usedRows = calculateUsedEligibleRows(
     [
-      { symbol: "ONDS", eligible: true, cspStrike: 9 },
-      { symbol: "PATH", eligible: true, cspStrike: 10.5 },
-      { symbol: "RGTI", eligible: true, cspStrike: 16 },
-      { symbol: "QBTS", eligible: true, cspStrike: 18 },
-      { symbol: "CIFR", eligible: true, cspStrike: 19 },
-      { symbol: "CLSK", eligible: true, cspStrike: 15 },
-      { symbol: "USAR", eligible: true, cspStrike: 21.5 },
-      { symbol: "CORZ", eligible: true, cspStrike: 22 },
-      { symbol: "BULL", eligible: true, cspStrike: 6 }
+      { symbol: "AAA", eligible: true, cspStrike: 9 },
+      { symbol: "EEE", eligible: true, cspStrike: 10.5 },
+      { symbol: "FFF", eligible: true, cspStrike: 16 },
+      { symbol: "GGG", eligible: true, cspStrike: 18 },
+      { symbol: "LLL", eligible: true, cspStrike: 19 },
+      { symbol: "DDD", eligible: true, cspStrike: 15 },
+      { symbol: "KKK", eligible: true, cspStrike: 21.5 },
+      { symbol: "MMM", eligible: true, cspStrike: 22 },
+      { symbol: "NNN", eligible: true, cspStrike: 6 }
     ],
     10000
   );
 
   assert.deepEqual(
     usedRows.map((row) => row.symbol),
-    ["ONDS", "PATH", "RGTI", "QBTS"]
+    ["AAA", "EEE", "FFF", "GGG"]
   );
   assert.deepEqual(
     usedRows.map((row) => row.contracts),
@@ -630,11 +630,11 @@ test("removes zero-contract rows and recalculates allocation using only used row
 test("small CSP portfolio allocates one affordable contract when weighted sizing rounds to zero", () => {
   const rows = applyAllocations(
     [
-      { symbol: "ONDS", eligible: true, cspStrike: 9, cspBid: 0.1, cspReturnPercent: 1.11 },
-      { symbol: "ACHR", eligible: true, cspStrike: 5.5, cspBid: 0.13, cspReturnPercent: 2.36 },
-      { symbol: "POET", eligible: true, cspStrike: 11.5, cspBid: 0.1, cspReturnPercent: 0.87 },
-      { symbol: "FIG", eligible: true, cspStrike: 17.5, cspBid: 0.15, cspReturnPercent: 0.86 },
-      { symbol: "USAR", eligible: true, cspStrike: 21, cspBid: 0.2, cspReturnPercent: 0.95 }
+      { symbol: "AAA", eligible: true, cspStrike: 9, cspBid: 0.1, cspReturnPercent: 1.11 },
+      { symbol: "HHH", eligible: true, cspStrike: 5.5, cspBid: 0.13, cspReturnPercent: 2.36 },
+      { symbol: "III", eligible: true, cspStrike: 11.5, cspBid: 0.1, cspReturnPercent: 0.87 },
+      { symbol: "JJJ", eligible: true, cspStrike: 17.5, cspBid: 0.15, cspReturnPercent: 0.86 },
+      { symbol: "KKK", eligible: true, cspStrike: 21, cspBid: 0.2, cspReturnPercent: 0.95 }
     ],
     1000
   );

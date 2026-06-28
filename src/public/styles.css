@@ -711,10 +711,6 @@ select:focus {
   margin-top: 1px;
 }
 
-.diagnostics-button {
-  width: 100%;
-}
-
 .check-control {
   display: inline-flex;
   align-items: center;
@@ -2050,10 +2046,6 @@ textarea:focus {
     justify-items: stretch;
     justify-self: stretch;
     width: 100%;
-  }
-
-  .diagnostics-button {
-    justify-self: stretch;
   }
 
   .table-header .check-control {

@@ -109,6 +109,7 @@
   function listRowAncestor(element, targetText) {
     let current = element;
     let best = element;
+    const sourceIsExact = sameNormalizedText(elementLabel(element), targetText);
 
     for (let depth = 0; current && depth < 9; depth += 1) {
       if (!visible(current)) {
@@ -118,13 +119,15 @@
 
       const rect = current.getBoundingClientRect();
       const label = elementLabel(current);
-      const exactText = label === targetText;
+      const exactText = sameNormalizedText(label, targetText);
       const rowSized =
         rect.width >= 180 &&
         rect.height >= 28 &&
         rect.height <= 110;
+      const rowContainsOnlyTarget =
+        sourceIsExact && label.length <= normalizeText(targetText).length + 40;
 
-      if (exactText && rowSized) {
+      if ((exactText || rowContainsOnlyTarget) && rowSized) {
         best = current;
       }
 
@@ -143,19 +146,27 @@
     );
   }
 
-  function isListTextMatch(text, targetText) {
+  function sameNormalizedText(text, targetText) {
+    return normalizeText(text).toLowerCase() === normalizeText(targetText).toLowerCase();
+  }
+
+  function isListTextMatch(text, targetText, { exact = false } = {}) {
     const normalized = normalizeText(text);
-    if (normalized === targetText) {
+    if (sameNormalizedText(normalized, targetText)) {
       return true;
     }
 
+    if (exact) {
+      return false;
+    }
+
     return (
-      normalized.includes(targetText) &&
+      normalized.toLowerCase().includes(normalizeText(targetText).toLowerCase()) &&
       normalized.length <= targetText.length + 30
     );
   }
 
-  function candidateElementsForText(targetText) {
+  function candidateElementsForText(targetText, options = {}) {
     const candidates = [];
     const seen = new Set();
 
@@ -164,10 +175,10 @@
         element,
         label: elementLabel(element)
       }))
-      .filter(({ element, label }) => label && isListTextMatch(label, targetText) && visible(element))
+      .filter(({ element, label }) => label && isListTextMatch(label, targetText, options) && visible(element))
       .sort((a, b) => {
-        const aExact = a.label === targetText ? 0 : 1;
-        const bExact = b.label === targetText ? 0 : 1;
+        const aExact = sameNormalizedText(a.label, targetText) ? 0 : 1;
+        const bExact = sameNormalizedText(b.label, targetText) ? 0 : 1;
         return aExact - bExact || a.label.length - b.label.length;
       })) {
       const targets = [
@@ -191,7 +202,7 @@
   function candidateClickScore(element, targetText) {
     const rect = element.getBoundingClientRect();
     const label = elementLabel(element);
-    const exact = label === targetText ? 0 : 20;
+    const exact = sameNormalizedText(label, targetText) ? 0 : 20;
     const rowLike = rect.width >= 180 && rect.height >= 28 && rect.height <= 110 ? 0 : 10;
     const interactive =
       element.matches?.("a, button, [role='button'], [role='link']") ||
@@ -202,96 +213,450 @@
     return exact + rowLike + interactive + Math.min(label.length / 1000, 2);
   }
 
-  function clickLikeUser(element) {
-    element.scrollIntoView({ block: "center", inline: "center" });
+  function isCreateListControl(element) {
+    return Boolean(
+      element?.matches?.("[data-testid='SidebarCreateListButton']") ||
+        /create new list or screener/i.test(element?.getAttribute?.("aria-label") || "")
+    );
+  }
+
+  function elementArea(element) {
     const rect = element.getBoundingClientRect();
+    return Math.max(0, rect.width) * Math.max(0, rect.height);
+  }
+
+  function exactTextElements(root, targetText) {
+    return [...root.querySelectorAll("a, button, [role='button'], [role='link'], span, div, h1, h2, h3, [role='heading']")]
+      .filter((element) => visible(element) && sameNormalizedText(elementLabel(element), targetText));
+  }
+
+  function exactListLabelElements(container, targetText) {
+    const currentRobinhoodLabels = [
+      ...container.querySelectorAll(
+        "div.web-app-emotion-cache-8uhtka > span.css-y3z1hq"
+      )
+    ].filter(
+      (element) => visible(element) && sameNormalizedText(element.textContent, targetText)
+    );
+    const semanticLabels = exactTextElements(container, targetText).filter(
+      (element) => element.matches?.("span") && !element.querySelector("span")
+    );
+
+    return uniqueElements([...currentRobinhoodLabels, ...semanticLabels]);
+  }
+
+  function listsHeaderElements() {
+    return [...document.querySelectorAll("h1, h2, h3, [role='heading'], span, div")]
+      .filter((element) => visible(element) && sameNormalizedText(elementLabel(element), "Lists"));
+  }
+
+  function listPanelRowLabelElements(root) {
+    return [...root.querySelectorAll("a, button, [role='button'], [role='link'], span, div")]
+      .filter((element) => {
+        if (!visible(element) || isCreateListControl(element)) {
+          return false;
+        }
+
+        const label = elementLabel(element);
+        if (!label || sameNormalizedText(label, "Lists") || label.length > 140) {
+          return false;
+        }
+
+        const rect = element.getBoundingClientRect();
+        return rect.width >= 110 && rect.height >= 18 && rect.height <= 120;
+      });
+  }
+
+  function listsContainerScore(container, header, targetText) {
+    if (!container || !visible(container) || !container.contains(header)) {
+      return -1;
+    }
+
+    const rect = container.getBoundingClientRect();
+    if (rect.width < 180 || rect.height < 70) {
+      return -1;
+    }
+
+    const exactCount = exactTextElements(container, targetText).length;
+    const createCount = [...container.querySelectorAll("button, [role='button'], [data-testid]")]
+      .filter(isCreateListControl).length;
+    const visibleRowCount = listPanelRowLabelElements(container).length;
+    const rightRailBonus = rect.left > window.innerWidth * 0.45 ? 80 : 0;
+    const listPanelBonus = createCount > 0 && visibleRowCount > 0 ? 500 : 0;
+    const headerOnlyPenalty = visibleRowCount === 0 ? 700 : 0;
+    const hugePenalty =
+      rect.width > window.innerWidth * 0.85 && rect.height > window.innerHeight * 0.85 ? 500 : 0;
+    const pageLikePenalty =
+      rect.width > window.innerWidth * 0.72 && rect.height > window.innerHeight * 0.72 ? 300 : 0;
+
+    return (
+      exactCount * 1000 +
+      createCount * 300 +
+      visibleRowCount * 40 +
+      listPanelBonus +
+      rightRailBonus +
+      100 -
+      headerOnlyPenalty -
+      hugePenalty -
+      pageLikePenalty -
+      elementArea(container) / 100000
+    );
+  }
+
+  function findListsContainers(targetText) {
+    const containers = [];
+    const seen = new Set();
+
+    for (const header of listsHeaderElements()) {
+      let current = header;
+      for (let depth = 0; current && depth < 10; depth += 1) {
+        if (!seen.has(current)) {
+          seen.add(current);
+          const score = listsContainerScore(current, header, targetText);
+          if (score >= 0) {
+            containers.push({ element: current, score });
+          }
+        }
+        current = current.parentElement;
+      }
+    }
+
+    return containers
+      .sort((a, b) => b.score - a.score || elementArea(a.element) - elementArea(b.element))
+      .map((entry) => entry.element);
+  }
+
+  function listRowWithinContainer(element, container, targetText) {
+    let current = element;
+    let best = element;
+    const targetLength = normalizeText(targetText).length;
+
+    for (let depth = 0; current && depth < 9; depth += 1) {
+      if (!container.contains(current) || isCreateListControl(current)) {
+        break;
+      }
+
+      if (visible(current)) {
+        const rect = current.getBoundingClientRect();
+        const label = elementLabel(current);
+        const rowSized =
+          rect.width >= 140 &&
+          rect.height >= 24 &&
+          rect.height <= 130;
+        const hasExactTarget =
+          exactTextElements(current, targetText).length > 0 ||
+          sameNormalizedText(label, targetText);
+        const labelStillSpecific =
+          sameNormalizedText(label, targetText) ||
+          label.length <= targetLength + 40;
+        const doesNotIncludeSiblingRows =
+          sameNormalizedText(label, targetText) ||
+          exactTextElements(current, targetText).length === 1;
+
+        if (rowSized && hasExactTarget && labelStillSpecific && doesNotIncludeSiblingRows) {
+          best = current;
+        }
+      }
+
+      if (current === container) {
+        break;
+      }
+      current = current.parentElement;
+    }
+
+    return best;
+  }
+
+  function exactListRowsInContainer(container, targetText) {
+    const rows = [];
+    const seen = new Set();
+
+    for (const element of exactTextElements(container, targetText)) {
+      if (isCreateListControl(element) || sameNormalizedText(elementLabel(element), "Lists")) {
+        continue;
+      }
+
+      const row = listRowWithinContainer(element, container, targetText);
+      if (!row || seen.has(row) || isCreateListControl(row)) {
+        continue;
+      }
+
+      seen.add(row);
+      rows.push(row);
+    }
+
+    return rows.sort((a, b) => candidateClickScore(a, targetText) - candidateClickScore(b, targetText));
+  }
+
+  function listsScrollTargets(container) {
+    const targets = [];
+    targets.push(...container.querySelectorAll("section, div, ul, [role='list'], [data-testid]"));
+    targets.push(container);
+
+    let current = container.parentElement;
+    for (let depth = 0; current && depth < 6; depth += 1) {
+      const rect = current.getBoundingClientRect();
+      const rightRailLike =
+        rect.left > window.innerWidth * 0.45 &&
+        rect.width <= Math.max(620, window.innerWidth * 0.42) &&
+        rect.height >= 120;
+
+      if (rightRailLike) {
+        targets.push(current);
+      }
+
+      current = current.parentElement;
+    }
+
+    return uniqueElements(targets).filter((element) => {
+      if (!element || !visible(element)) {
+        return false;
+      }
+      return element.scrollHeight > element.clientHeight + 20;
+    });
+  }
+
+  function scrollListsContainer(container, direction = 1) {
+    let moved = false;
+    for (const target of listsScrollTargets(container)) {
+      const before = target.scrollTop;
+      const amount = Math.max(Math.round((target.clientHeight || 520) * 1.15), 620) * direction;
+      target.scrollTop = Math.max(0, Math.min(target.scrollTop + amount, target.scrollHeight));
+      if (target.scrollTop !== before) {
+        moved = true;
+      }
+
+      if (moved) {
+        dispatchWheelAt(target, amount);
+        break;
+      }
+    }
+    return moved;
+  }
+
+  function ensureListRowVisibleInPanel(element, container) {
+    for (const target of listsScrollTargets(container)) {
+      if (!target.contains(element)) {
+        continue;
+      }
+
+      const rowRect = element.getBoundingClientRect();
+      const targetRect = target.getBoundingClientRect();
+      if (rowRect.top < targetRect.top + 12) {
+        target.scrollTop = Math.max(0, target.scrollTop - (targetRect.top + 24 - rowRect.top));
+      } else if (rowRect.bottom > targetRect.bottom - 12) {
+        target.scrollTop = Math.min(
+          target.scrollHeight,
+          target.scrollTop + (rowRect.bottom - targetRect.bottom + 24)
+        );
+      }
+      break;
+    }
+  }
+
+  async function clickListExpanderInContainer(container) {
+    for (const label of ["Show more", "See more", "View all", "More"]) {
+      const candidate = [...container.querySelectorAll("a, button, [role='button'], [role='link'], span, div")]
+        .filter((element) => visible(element) && isListTextMatch(elementLabel(element), label, { exact: true }))
+        .map((element) => clickableAncestor(element))[0];
+      if (candidate) {
+        clickLikeUser(candidate);
+        await wait(300);
+        return true;
+      }
+    }
+    return false;
+  }
+
+  function robinhoodHomePath() {
+    return window.location.hostname.endsWith("robinhood.com") &&
+      window.location.pathname.replace(/\/+$/, "") === "";
+  }
+
+  function robinhoodScreenerPath() {
+    return window.location.hostname.endsWith("robinhood.com") &&
+      /^\/screener\/[^/]+/i.test(window.location.pathname);
+  }
+
+  function screenerNameFromControl(control) {
+    return normalizeText(control?.getAttribute?.("title") || control?.textContent || "");
+  }
+
+  function visibleScreenerNameControls() {
+    return [...document.querySelectorAll('button[data-testid="screener-name-input"]')]
+      .filter(visible);
+  }
+
+  function openedScreenerNameControl(listName) {
+    return visibleScreenerNameControls().find((control) =>
+      sameNormalizedText(screenerNameFromControl(control), listName)
+    ) || null;
+  }
+
+  function currentOpenedScreenerName() {
+    return screenerNameFromControl(visibleScreenerNameControls()[0]);
+  }
+
+  function openedListRoot(listName) {
+    if (!robinhoodScreenerPath()) {
+      return null;
+    }
+
+    const nameControl = openedScreenerNameControl(listName);
+    if (nameControl) {
+      return (
+        nameControl.closest("[role='main'], main") ||
+        document.querySelector("[role='main'], main") ||
+        document
+      );
+    }
+
+    return null;
+  }
+
+  async function waitForOpenedList(listName, timeoutMs = 15000) {
+    const startedAt = Date.now();
+    let sawScreenerRoute = false;
+    let observedName = "";
+
+    while (Date.now() - startedAt < timeoutMs) {
+      await wait(250);
+      if (robinhoodScreenerPath()) {
+        sawScreenerRoute = true;
+        observedName = currentOpenedScreenerName() || observedName;
+        if (openedScreenerNameControl(listName)) {
+          return {
+            opened: true,
+            reason: "confirmed",
+            observedName: listName
+          };
+        }
+      }
+    }
+
+    return {
+      opened: false,
+      reason: sawScreenerRoute
+        ? observedName
+          ? "name-mismatch"
+          : "name-missing"
+        : "route-missing",
+      observedName
+    };
+  }
+
+  function clickLikeUser(element) {
+    let rect = element.getBoundingClientRect();
+    const inViewport =
+      rect.top >= 0 &&
+      rect.left >= 0 &&
+      rect.bottom <= window.innerHeight &&
+      rect.right <= window.innerWidth;
+
+    if (!inViewport) {
+      element.scrollIntoView({ block: "nearest", inline: "nearest" });
+      rect = element.getBoundingClientRect();
+    }
     const clientX = rect.left + rect.width / 2;
     const clientY = rect.top + rect.height / 2;
     const pointTarget = document.elementFromPoint(clientX, clientY);
-    const targets =
+    const target =
       pointTarget && (pointTarget === element || element.contains?.(pointTarget))
-        ? [element]
-        : [...new Set([pointTarget, element].filter(Boolean))];
+        ? element
+        : pointTarget || element;
 
-    for (const target of targets) {
-      for (const type of ["pointerover", "mouseover", "pointermove", "mousemove"]) {
-        const isPointer = type.startsWith("pointer") && typeof PointerEvent === "function";
-        const EventConstructor = isPointer ? PointerEvent : MouseEvent;
-        target.dispatchEvent(
-          new EventConstructor(type, {
-            bubbles: true,
-            cancelable: true,
-            view: window,
-            clientX,
-            clientY,
-            button: 0,
-            buttons: type.includes("down") ? 1 : 0,
-            pointerId: 1,
-            pointerType: "mouse",
-            isPrimary: true
-          })
-        );
-      }
-
-      if (typeof target.click === "function") {
-        target.click();
-      } else {
-        target.dispatchEvent(
-          new MouseEvent("click", {
-            bubbles: true,
-            cancelable: true,
-            view: window,
-            clientX,
-            clientY
-          })
-        );
-      }
+    for (const type of ["pointerover", "mouseover", "pointermove", "mousemove", "pointerdown", "mousedown"]) {
+      const isPointer = type.startsWith("pointer") && typeof PointerEvent === "function";
+      const EventConstructor = isPointer ? PointerEvent : MouseEvent;
+      target.dispatchEvent(
+        new EventConstructor(type, {
+          bubbles: true,
+          cancelable: true,
+          view: window,
+          clientX,
+          clientY,
+          button: 0,
+          buttons: type.includes("down") ? 1 : 0,
+          pointerId: 1,
+          pointerType: "mouse",
+          isPrimary: true
+        })
+      );
     }
+
+    for (const type of ["pointerup", "mouseup"]) {
+      const isPointer = type.startsWith("pointer") && typeof PointerEvent === "function";
+      const EventConstructor = isPointer ? PointerEvent : MouseEvent;
+      target.dispatchEvent(
+        new EventConstructor(type, {
+          bubbles: true,
+          cancelable: true,
+          view: window,
+          clientX,
+          clientY,
+          button: 0,
+          buttons: 0,
+          pointerId: 1,
+          pointerType: "mouse",
+          isPrimary: true
+        })
+      );
+    }
+
+    if (typeof target.click === "function") {
+      target.click();
+    } else {
+      target.dispatchEvent(
+        new MouseEvent("click", {
+          bubbles: true,
+          cancelable: true,
+          view: window,
+          clientX,
+          clientY
+        })
+      );
+    }
+  }
+
+  function clickExactListLabel(element) {
+    element.scrollIntoView({ block: "nearest", inline: "nearest" });
+    const rect = element.getBoundingClientRect();
+    const clientX = rect.left + rect.width / 2;
+    const clientY = rect.top + rect.height / 2;
+
+    for (const type of [
+      "pointerover",
+      "mouseover",
+      "pointermove",
+      "mousemove",
+      "pointerdown",
+      "mousedown",
+      "pointerup",
+      "mouseup"
+    ]) {
+      const isPointer = type.startsWith("pointer") && typeof PointerEvent === "function";
+      const EventConstructor = isPointer ? PointerEvent : MouseEvent;
+      element.dispatchEvent(
+        new EventConstructor(type, {
+          bubbles: true,
+          cancelable: true,
+          view: window,
+          clientX,
+          clientY,
+          button: 0,
+          buttons: type.includes("down") ? 1 : 0,
+          pointerId: 1,
+          pointerType: "mouse",
+          isPrimary: true
+        })
+      );
+    }
+
+    element.click();
   }
 
   function symbolSignature(symbols) {
     return [...symbols].sort().join("|");
-  }
-
-  async function waitForClickEffect(beforeUrl, beforeSignature) {
-    for (let attempt = 0; attempt < 10; attempt += 1) {
-      await wait(250);
-      const currentSignature = symbolSignature(extractSymbolsFromPage());
-      if (window.location.href !== beforeUrl) {
-        return true;
-      }
-      if (currentSignature && currentSignature !== beforeSignature) {
-        return true;
-      }
-    }
-
-    return false;
-  }
-
-  function scrollContainers(direction = 1) {
-    const scrollables = [
-      document.scrollingElement,
-      ...document.querySelectorAll("aside, nav, main, section, div, ul, [role='list'], [role='grid'], [role='table']")
-    ].filter((element, index, elements) => {
-      if (!element || elements.indexOf(element) !== index) {
-        return false;
-      }
-
-      const canScroll = element.scrollHeight > element.clientHeight + 20;
-      return canScroll && visible(element);
-    });
-
-    let moved = false;
-    for (const element of scrollables) {
-      const before = element.scrollTop;
-      const amount = Math.max(Math.round(element.clientHeight * 0.7), 320) * direction;
-      element.scrollTop = Math.max(0, Math.min(element.scrollTop + amount, element.scrollHeight));
-      if (element.scrollTop !== before) {
-        moved = true;
-      }
-    }
-
-    return moved;
   }
 
   function resetScrollableContainers() {
@@ -303,55 +668,46 @@
     }
   }
 
-  async function clickPossibleListExpander() {
-    const labels = [
-      "Lists",
-      "Watchlists",
-      "Show more",
-      "See more",
-      "View all",
-      "More"
-    ];
-
-    for (const label of labels) {
-      const candidate = candidateElementsForText(label)[0];
-      if (candidate) {
-        clickLikeUser(candidate);
-        await wait(300);
-        return true;
-      }
-    }
-
-    return false;
-  }
-
   async function clickListByName(listName) {
     await waitForRobinhoodApp();
     resetScrollableContainers();
 
-    for (let attempt = 0; attempt < 24; attempt += 1) {
-      const candidates = candidateElementsForText(listName);
-      for (const clickable of candidates) {
-        const beforeUrl = window.location.href;
-        const beforeSignature = symbolSignature(extractSymbolsFromPage());
-        clickLikeUser(clickable);
-        const opened = await waitForClickEffect(beforeUrl, beforeSignature);
+    for (let attempt = 0; attempt < 12; attempt += 1) {
+      const containers = findListsContainers(listName);
 
-        if (opened) {
-          return true;
+      for (const container of containers) {
+        const labels = exactListLabelElements(container, listName);
+        if (labels.length > 0) {
+          const label = labels[0];
+          ensureListRowVisibleInPanel(label, container);
+          clickExactListLabel(label);
+          return waitForOpenedList(listName);
+        }
+
+          const candidates = exactListRowsInContainer(container, listName);
+          for (const clickable of candidates) {
+            ensureListRowVisibleInPanel(clickable, container);
+            clickLikeUser(clickable);
+            return waitForOpenedList(listName);
+          }
+      }
+
+      if (attempt === 1) {
+        for (const container of containers) {
+          await clickListExpanderInContainer(container);
         }
       }
 
-      if (attempt % 8 === 2) {
-        await clickPossibleListExpander();
+      let moved = false;
+      for (const container of containers) {
+        moved = scrollListsContainer(container, attempt < 10 ? 1 : -1) || moved;
       }
 
-      const moved = scrollContainers(attempt % 12 < 10 ? 1 : -1);
-      if (!moved && attempt > 12) {
+      if (!moved && attempt > 6) {
         resetScrollableContainers();
       }
 
-      await wait(150);
+      await wait(70);
     }
 
     return false;
@@ -398,8 +754,8 @@
     return [...new Set(elements.filter(Boolean))];
   }
 
-  function visibleStockAnchors() {
-    return stockAnchors(document).filter(visible);
+  function visibleStockAnchors(root = document) {
+    return stockAnchors(root).filter(visible);
   }
 
   function visibleStockAnchorsIn(element) {
@@ -425,20 +781,31 @@
     return stockCount * 1000 + scrollable * 300 + usableSize * 100 + Math.min(area / 10000, 80);
   }
 
-  function stockListScrollTargets() {
+  function stockListScrollTargets(root = document) {
     const targets = [];
 
-    for (const anchor of visibleStockAnchors()) {
+    for (const anchor of visibleStockAnchors(root)) {
       let current = anchor;
       for (let depth = 0; current && depth < 10; depth += 1) {
         targets.push(current);
+        if (root !== document && current === root) {
+          break;
+        }
         current = current.parentElement;
       }
     }
 
-    targets.push(document.scrollingElement, document.documentElement, document.body);
+    if (root === document) {
+      targets.push(document.scrollingElement, document.documentElement, document.body);
+    } else {
+      targets.push(root);
+    }
 
-    for (const element of document.querySelectorAll("main, aside, section, div, ul, [role='list'], [role='grid'], [role='table'], [data-testid]")) {
+    const scopedElements =
+      root === document
+        ? document.querySelectorAll("main, aside, section, div, ul, [role='list'], [role='grid'], [role='table'], [data-testid]")
+        : root.querySelectorAll("section, div, ul, [role='list'], [role='grid'], [role='table'], [data-testid]");
+    for (const element of scopedElements) {
       if (visible(element)) {
         targets.push(element);
       }
@@ -450,15 +817,15 @@
       .slice(0, 4);
   }
 
-  function lastVisibleStockAnchor() {
-    return visibleStockAnchors()
+  function lastVisibleStockAnchor(root = document) {
+    return visibleStockAnchors(root)
       .sort((a, b) => a.getBoundingClientRect().top - b.getBoundingClientRect().top)
       .at(-1);
   }
 
-  function bestSymbolRoot() {
-    const roots = stockListScrollTargets();
-    return roots.find((element) => visibleStockAnchorsIn(element).length > 0) || document;
+  function bestSymbolRoot(root = document) {
+    const roots = stockListScrollTargets(root);
+    return roots.find((element) => visibleStockAnchorsIn(element).length > 0) || root;
   }
 
   function dispatchWheelAt(element, deltaY) {
@@ -494,10 +861,10 @@
     );
   }
 
-  async function scrollRobinhoodList() {
+  async function scrollRobinhoodList(root = document) {
     let moved = false;
     const amount = Math.max(Math.round(window.innerHeight * 1.15), 1100);
-    const anchor = lastVisibleStockAnchor();
+    const anchor = lastVisibleStockAnchor(root);
 
     if (anchor) {
       for (let index = 0; index < 5; index += 1) {
@@ -506,7 +873,7 @@
       dispatchPageDown(anchor);
     }
 
-    const targets = stockListScrollTargets().slice(0, 2);
+    const targets = stockListScrollTargets(root).slice(0, 2);
 
     for (const element of targets) {
       const before = element.scrollTop;
@@ -527,18 +894,21 @@
       }
     }
 
-    const beforeWindowY = window.scrollY;
-    const windowAmount = Math.round(window.innerHeight * 1.15);
-    window.scrollBy(0, windowAmount * 2);
-    for (let index = 0; index < 2; index += 1) {
-      dispatchWheelAt(document.body, windowAmount);
+    if (root === document) {
+      const beforeWindowY = window.scrollY;
+      const windowAmount = Math.round(window.innerHeight * 1.15);
+      window.scrollBy(0, windowAmount * 2);
+      for (let index = 0; index < 2; index += 1) {
+        dispatchWheelAt(document.body, windowAmount);
+      }
+      moved = moved || window.scrollY !== beforeWindowY;
     }
 
     await wait(80);
-    return moved || window.scrollY !== beforeWindowY;
+    return moved;
   }
 
-  async function collectSymbolsFromPage() {
+  async function collectSymbolsFromPage(root = document) {
     const symbols = [];
     const seen = new Set();
     let stagnantRounds = 0;
@@ -560,8 +930,16 @@
       return symbols.length > before;
     };
 
-    window.scrollTo(0, 0);
-    for (const element of document.querySelectorAll("main, aside, section, div, ul, [role='list'], [role='grid'], [role='table'], [data-testid]")) {
+    if (root === document) {
+      window.scrollTo(0, 0);
+    } else if (typeof root.scrollTo === "function") {
+      root.scrollTo(0, 0);
+    }
+    const resetElements =
+      root === document
+        ? document.querySelectorAll("main, aside, section, div, ul, [role='list'], [role='grid'], [role='table'], [data-testid]")
+        : root.querySelectorAll("section, div, ul, [role='list'], [role='grid'], [role='table'], [data-testid]");
+    for (const element of resetElements) {
       if (element.scrollHeight > element.clientHeight + 20) {
         element.scrollTop = 0;
       }
@@ -575,11 +953,13 @@
       diagnostics.rounds = round + 1;
       diagnostics.bestVisibleAnchors = Math.max(
         diagnostics.bestVisibleAnchors,
-        visibleStockAnchors().length
+        visibleStockAnchors(root).length
       );
 
-      const root = bestSymbolRoot();
-      const grew = append(extractSymbolsFromPage(root)) || append(extractSymbolsFromPage());
+      const symbolRoot = bestSymbolRoot(root);
+      const grew =
+        append(extractSymbolsFromPage(symbolRoot)) ||
+        (root === document ? append(extractSymbolsFromPage()) : false);
       const signature = symbolSignature(symbols);
       stagnantRounds = grew ? 0 : stagnantRounds + 1;
       if (signature !== lastSignature) {
@@ -587,8 +967,8 @@
         stagnantRounds = 0;
       }
 
-      await scrollRobinhoodList();
-      diagnostics.scrollTargets = Math.max(diagnostics.scrollTargets, stockListScrollTargets().length);
+      await scrollRobinhoodList(root);
+      diagnostics.scrollTargets = Math.max(diagnostics.scrollTargets, stockListScrollTargets(root).length);
       await wait(120);
 
       if (round >= 5 && stagnantRounds >= 6) {
@@ -596,10 +976,36 @@
       }
     }
 
-    diagnostics.finalVisibleAnchors = visibleStockAnchors().length;
-    append(extractSymbolsFromPage(bestSymbolRoot()));
-    append(extractSymbolsFromPage());
+    diagnostics.finalVisibleAnchors = visibleStockAnchors(root).length;
+    append(extractSymbolsFromPage(bestSymbolRoot(root)));
+    if (root === document) {
+      append(extractSymbolsFromPage());
+    }
     return { symbols, diagnostics };
+  }
+
+  async function waitForScreenerSymbols(root, timeoutMs = 15000) {
+    const startedAt = Date.now();
+    while (Date.now() - startedAt < timeoutMs) {
+      if (extractSymbolsFromPage(bestSymbolRoot(root)).length > 0) {
+        return true;
+      }
+      await wait(250);
+    }
+    return false;
+  }
+
+  function openedScreenerFailure(listName, confirmation) {
+    if (confirmation?.reason === "route-missing") {
+      return `Clicked "${listName}", but Robinhood did not open its screener page.`;
+    }
+    if (confirmation?.reason === "name-mismatch") {
+      return `Robinhood opened screener "${confirmation.observedName}", but expected "${listName}".`;
+    }
+    if (confirmation?.reason === "name-missing") {
+      return "Robinhood opened a screener page, but its screener name could not be confirmed.";
+    }
+    return `Could not find Robinhood screener named "${listName}".`;
   }
 
   async function extractScreener(screenerName) {
@@ -609,13 +1015,50 @@
       throw new Error("Log in to Robinhood in the opened Chrome tab, then return and refresh.");
     }
 
-    const clicked = await clickListByName(screenerName);
-    if (!clicked) {
-      throw new Error(`Could not find Robinhood list named "${screenerName}".`);
+    let confirmation = null;
+
+    if (robinhoodScreenerPath()) {
+      const currentName = currentOpenedScreenerName();
+      if (currentName && !sameNormalizedText(currentName, screenerName)) {
+        return {
+          retryFromHome: true
+        };
+      }
+
+      confirmation = openedScreenerNameControl(screenerName)
+        ? { opened: true, reason: "confirmed", observedName: screenerName }
+        : await waitForOpenedList(screenerName);
+      if (!confirmation.opened) {
+        return {
+          retryFromHome: true
+        };
+      }
+    } else if (!robinhoodHomePath()) {
+      return {
+        retryFromHome: true
+      };
+    } else {
+      confirmation = await clickListByName(screenerName);
+      if (!confirmation.opened) {
+        throw new Error(openedScreenerFailure(screenerName, confirmation));
+      }
     }
 
-    await wait(900);
-    const collected = await collectSymbolsFromPage();
+    if (!robinhoodScreenerPath()) {
+      throw new Error(`Could not open Robinhood screener named "${screenerName}".`);
+    }
+
+    await wait(500);
+    const listRoot = openedListRoot(screenerName);
+    if (!listRoot) {
+      throw new Error(`Could not confirm Robinhood screener "${screenerName}" opened before extracting symbols.`);
+    }
+
+    if (!(await waitForScreenerSymbols(listRoot))) {
+      throw new Error(`Opened "${screenerName}", but no stock symbols were detected.`);
+    }
+
+    const collected = await collectSymbolsFromPage(listRoot);
     const symbols = collected.symbols;
 
     if (symbols.length === 0) {
@@ -751,7 +1194,9 @@
       return null;
     }
 
-    const preferred = cell.querySelector?.('[class*="URCNCRkOrsFeQ6BHrJU3Q"]');
+    const preferred = cell.querySelector?.(
+      '[class*="URCNCRkOrsFeQ6BHrJU3Q"], [class*="sTkTMJqe3B7iJLnJngmcMA"]'
+    );
     const preferredCost = parseMoney(preferred?.textContent || "");
     if (Number.isFinite(preferredCost)) {
       return preferredCost;
@@ -954,16 +1399,82 @@
     return best;
   }
 
-  function currentAccountName() {
-    const candidates = [...document.querySelectorAll("button, [role='button'], [aria-haspopup], [data-testid]")]
-      .filter(visible)
-      .map((element) => normalizeText(elementLabel(element)))
-      .filter((label) =>
-        /\b(?:individual|brokerage|ira|roth|traditional|margin|cash|retirement|account|investing)\b/i.test(label)
-      )
-      .sort((a, b) => a.length - b.length);
+  let lastAccountMenuRoot = null;
 
-    return candidates[0] || "Robinhood";
+  function accountDropdownLabel(element) {
+    if (!element) {
+      return "";
+    }
+
+    const labelNodes = element.querySelectorAll
+      ? [
+          ...element.querySelectorAll(
+            '[class*="1a07lwf"], [class*="md9imy"] div, [class*="md9imy"] span'
+          )
+        ]
+      : [];
+    const preferred = labelNodes
+      .map((candidate) => normalizeText(candidate.innerText || candidate.textContent || ""))
+      .filter((label) =>
+        label &&
+        label.length <= 60 &&
+        !/^(?:selected account|account selected)$/i.test(label) &&
+        !/^\$?-?\d[\d,.]*%?$/.test(label) &&
+        !isNonAccountOptionText(label)
+      )[0];
+
+    return preferred || accountChoiceLabel(element);
+  }
+
+  function accountDropdownButton() {
+    const candidates = [...document.querySelectorAll("button[role='combobox']")]
+      .filter((element) => {
+        if (!visible(element)) {
+          return false;
+        }
+
+        const label = normalizeText(accountDropdownLabel(element));
+        if (!label || label.length > 80 || isNonAccountOptionText(label) || /\b(?:sort|filter)\b/i.test(label)) {
+          return false;
+        }
+
+        const structureHint = Boolean(
+          element.closest?.('[class*="16lfj6j"]') ||
+            element.querySelector?.('[class*="1a07lwf"], [class*="md9imy"]')
+        );
+        const hasReadableLabel = Boolean(label && element.querySelector?.("div, span, p"));
+        const hasPickerShape = Boolean(element.querySelector?.("svg")) || element.getAttribute("aria-expanded") !== null;
+        const inGlobalNav = Boolean(element.closest?.("header, nav"));
+
+        return !inGlobalNav && hasReadableLabel && (structureHint || hasPickerShape);
+      })
+      .sort((a, b) => {
+        const score = (element) => {
+          const rect = element.getBoundingClientRect();
+          const labelNode = element.querySelector?.('[class*="1a07lwf"], [class*="md9imy"]');
+          const wrapper = element.closest?.('[class*="16lfj6j"]');
+          const selectorSized = rect.width >= 140 && rect.width <= 420 && rect.height >= 32 && rect.height <= 90;
+          return (
+            (wrapper ? 0 : 20) +
+            (labelNode ? 0 : 12) +
+            (selectorSized ? 0 : 6) +
+            rect.top / 10000 +
+            rect.left / 100000
+          );
+        };
+        return score(a) - score(b);
+      });
+
+    return candidates[0] || null;
+  }
+
+  function currentAccountName() {
+    const dropdownLabel = normalizeText(accountDropdownLabel(accountDropdownButton()) || "");
+    if (dropdownLabel && !isNonAccountOptionText(dropdownLabel)) {
+      return dropdownLabel;
+    }
+
+    return "Robinhood";
   }
 
   function collectStockPositionsFromPage(accountName = currentAccountName()) {
@@ -1006,36 +1517,11 @@
     return positions;
   }
 
-  function accountDropdownCandidates() {
-    return [...document.querySelectorAll("button, [role='button'], [aria-haspopup='menu'], [aria-haspopup='listbox']")]
-      .filter((element) => {
-        if (!visible(element)) {
-          return false;
-        }
-
-        const label = elementLabel(element);
-        if (!label || label.length > 80 || /\b(?:buy|sell|search|notifications?|settings|help|rewards|crypto)\b/i.test(label)) {
-          return false;
-        }
-
-        return (
-          /\b(?:account|individual|brokerage|ira|roth|traditional|margin|cash|retirement|investing|personal|joint)\b/i.test(label) ||
-          element.matches?.("[aria-haspopup='menu'], [aria-haspopup='listbox']") ||
-          Boolean(element.querySelector?.("svg"))
-        );
-      })
-      .sort((a, b) => {
-        const aLabel = elementLabel(a);
-        const bLabel = elementLabel(b);
-        const aAccount = /\baccount\b/i.test(aLabel) ? 0 : 1;
-        const bAccount = /\baccount\b/i.test(bLabel) ? 0 : 1;
-        const aPopup = a.matches?.("[aria-haspopup='menu'], [aria-haspopup='listbox']") ? 0 : 1;
-        const bPopup = b.matches?.("[aria-haspopup='menu'], [aria-haspopup='listbox']") ? 0 : 1;
-        return aAccount - bAccount || aPopup - bPopup || aLabel.length - bLabel.length;
-      });
-  }
-
   function accountChoiceLabel(element) {
+    if (!element) {
+      return "";
+    }
+
     const labelNodes = element.querySelectorAll ? [...element.querySelectorAll("p, span")] : [];
     const preferred = labelNodes
       .map((candidate) => normalizeText(candidate.innerText || candidate.textContent || ""))
@@ -1049,15 +1535,46 @@
     return preferred || elementLabel(element);
   }
 
+  function accountOptionLabel(element) {
+    if (!element) {
+      return "";
+    }
+
+    const labelNodes = element.querySelectorAll
+      ? [
+          ...element.querySelectorAll(
+            '[class*="m9fipx"] p, p[class*="y3z1hq"], [class*="m9fipx"] span'
+          )
+        ]
+      : [];
+    const preferred = labelNodes
+      .map((candidate) => normalizeText(candidate.innerText || candidate.textContent || ""))
+      .filter((label) =>
+        label &&
+        label.length <= 60 &&
+        !/^(?:selected account|account selected)$/i.test(label) &&
+        !/^\$?-?\d[\d,.]*%?$/.test(label) &&
+        !isNonAccountOptionText(label)
+      )[0];
+
+    return preferred || "";
+  }
+
   function isNonAccountGroupText(text) {
     return /^(?:stocks|name|symbol|shares|price|average cost|total return|equity|search|rewards|investing|crypto|portfolio overview|notifications|account|settings|help|history|transfers|recurring|stock lending|margin investing|reports and statements|tax center)$/i.test(
       normalizeText(text)
     );
   }
 
-  function accountGroupHeadingFor(element) {
+  function accountGroupHeadingFor(element, root = document) {
     const rect = element.getBoundingClientRect();
-    const headings = visibleTextElements("div, span, p")
+    const headings = [...root.querySelectorAll("div, span, p")]
+      .filter(visible)
+      .map((candidate) => ({
+        element: candidate,
+        text: normalizeText(candidate.innerText || candidate.textContent || ""),
+        rect: candidate.getBoundingClientRect()
+      }))
       .filter(({ element: candidate, text, rect: candidateRect }) => {
         if (
           candidate.closest?.("button, a, [role='button'], [role='menuitem'], [role='option']") ||
@@ -1083,13 +1600,62 @@
     );
   }
 
-  function accountOptionDescriptors() {
+  function accountOptionIsSelected(element) {
+    const label = elementLabel(element);
+    return (
+      /\bselected account\b|\baccount selected\b/i.test(label) ||
+      Boolean(element.querySelector?.('[aria-label*="Selected account"], [aria-label*="selected account"]'))
+    );
+  }
+
+  function accountOptionElements(root = document) {
+    return [...root.querySelectorAll("button, [role='menuitem'], [role='option']")]
+      .filter((element) => visible(element) && accountOptionLabel(element));
+  }
+
+  function accountMenuRootFor(dropdown) {
+    const optionElements = accountOptionElements(document);
+    if (optionElements.length === 0) {
+      return null;
+    }
+
+    const dropdownRect = dropdown?.getBoundingClientRect?.();
+    const roots = new Map();
+    for (const option of optionElements) {
+      let current = option.parentElement;
+      for (let depth = 0; current && depth < 8; depth += 1) {
+        if (current === document.body || current === document.documentElement) {
+          break;
+        }
+        if (visible(current)) {
+          roots.set(current, accountOptionElements(current).length);
+        }
+        current = current.parentElement;
+      }
+    }
+
+    return [...roots.entries()]
+      .filter(([, count]) => count > 0)
+      .sort(([a, aCount], [b, bCount]) => {
+        const aRect = a.getBoundingClientRect();
+        const bRect = b.getBoundingClientRect();
+        const aArea = aRect.width * aRect.height;
+        const bArea = bRect.width * bRect.height;
+        const distance = (rect) =>
+          dropdownRect
+            ? Math.abs(rect.left - dropdownRect.left) + Math.abs(rect.top - dropdownRect.bottom)
+            : rect.top + rect.left;
+        return bCount - aCount || aArea - bArea || distance(aRect) - distance(bRect);
+      })[0]?.[0] || null;
+  }
+
+  function accountOptionDescriptors(root = lastAccountMenuRoot || document) {
     const descriptors = [];
     const occurrenceCounts = new Map();
 
-    for (const element of [...document.querySelectorAll("button, [role='menuitem'], [role='option'], [role='button']")].filter(visible)) {
-      const label = accountChoiceLabel(element);
-      const group = accountGroupHeadingFor(element);
+    for (const element of accountOptionElements(root)) {
+      const label = accountOptionLabel(element);
+      const group = accountGroupHeadingFor(element, root);
       if (!label || !group || label.length > 80 || isNonAccountOptionText(label)) {
         continue;
       }
@@ -1105,6 +1671,7 @@
         group,
         label,
         displayName,
+        selected: accountOptionIsSelected(element),
         element
       });
     }
@@ -1113,11 +1680,15 @@
   }
 
   function clickAccountOption(option) {
-    const target = accountOptionDescriptors()
+    const target = accountOptionDescriptors(lastAccountMenuRoot || document)
       .filter((candidate) => candidate.key === option.key || (candidate.group === option.group && candidate.label === option.label))
       .sort((a, b) => candidateClickScore(a.element, a.label) - candidateClickScore(b.element, b.label))[0]?.element;
     if (!target) {
-      return false;
+      return {
+        opened: false,
+        reason: "label-missing",
+        observedName: ""
+      };
     }
 
     clickLikeUser(target);
@@ -1125,14 +1696,20 @@
   }
 
   async function openAccountDropdown() {
-    for (const candidate of accountDropdownCandidates().slice(0, 8)) {
-      clickLikeUser(candidate);
-      await wait(400);
-      if (accountOptionDescriptors().length > 0) {
-        return true;
-      }
+    const dropdown = accountDropdownButton();
+    if (!dropdown) {
+      lastAccountMenuRoot = null;
+      return false;
     }
 
+    clickLikeUser(dropdown);
+    await wait(500);
+    lastAccountMenuRoot = accountMenuRootFor(dropdown);
+    if (lastAccountMenuRoot && accountOptionDescriptors(lastAccountMenuRoot).length > 0) {
+      return true;
+    }
+
+    lastAccountMenuRoot = null;
     return false;
   }
 
@@ -1152,6 +1729,22 @@
         const bStocks = /\bstocks\b/i.test(bText) ? 0 : 1;
         return aStocks - bStocks || b.clientHeight - a.clientHeight;
       });
+  }
+
+  async function scrollToStocksHeading() {
+    for (let attempt = 0; attempt < 18; attempt += 1) {
+      ensureAccountInvestingPage();
+      const heading = findStocksHeading();
+      if (heading) {
+        heading.scrollIntoView({ block: "start", inline: "nearest" });
+        await wait(450);
+        return true;
+      }
+
+      await scrollStockPositionsPage();
+    }
+
+    return false;
   }
 
   function resetStockPositionScroll() {
@@ -1176,6 +1769,7 @@
 
     resetStockPositionScroll();
     await wait(120);
+    await scrollToStocksHeading();
 
     for (let round = 0; round < 28 && stagnantRounds < 5; round += 1) {
       ensureAccountInvestingPage();
@@ -1208,9 +1802,14 @@
 
     const positions = [];
     const seenRows = new Set();
-    const collect = (accountName = currentAccountName()) => {
-      for (const position of collectStockPositionsFromPage(accountName)) {
-        const key = `${position.accountName}|${position.symbol}|${position.shares}|${position.averageCost}`;
+    const diagnostics = { warnings: [] };
+
+    const rowKey = (position) =>
+      `${position.accountName}|${position.symbol}|${position.shares}|${position.averageCost}`;
+
+    const addPositions = (batch) => {
+      for (const position of batch) {
+        const key = rowKey(position);
         if (!seenRows.has(key)) {
           seenRows.add(key);
           positions.push(position);
@@ -1218,12 +1817,64 @@
       }
     };
 
+    const collectAccount = async (accountName) => {
+      addPositions(await collectStockPositionsForAccount(accountName || currentAccountName()));
+    };
+
+    const renameAccount = (fromName, toName) => {
+      if (!fromName || !toName || sameNormalizedText(fromName, toName)) {
+        return;
+      }
+
+      for (const position of positions) {
+        if (sameNormalizedText(position.accountName, fromName)) {
+          position.accountName = toName;
+        }
+      }
+
+      const uniquePositions = [];
+      seenRows.clear();
+      for (const position of positions) {
+        const key = rowKey(position);
+        if (!seenRows.has(key)) {
+          seenRows.add(key);
+          uniquePositions.push(position);
+        }
+      }
+      positions.splice(0, positions.length, ...uniquePositions);
+    };
+
     await wait(900);
 
+    let accountOptions = [];
+    let selectedAccountKey = null;
+    let selectedAccountName = currentAccountName();
+
+    await collectAccount(selectedAccountName);
+    resetStockPositionScroll();
+
     if (await openAccountDropdown()) {
-      const accountOptions = accountOptionDescriptors();
+      accountOptions = accountOptionDescriptors(lastAccountMenuRoot || document);
+      const selectedOption =
+        accountOptions.find((option) => option.selected) ||
+        accountOptions.find((option) => sameNormalizedText(option.label, selectedAccountName));
+
+      if (selectedOption) {
+        selectedAccountKey = selectedOption.key;
+        renameAccount(selectedAccountName, selectedOption.displayName);
+        selectedAccountName = selectedOption.displayName;
+      }
+    } else {
+      diagnostics.warnings.push("Account selector was not found; imported the current account only.");
+    }
+
+    if (accountOptions.length > 0) {
       for (const option of accountOptions) {
-        if (accountOptionDescriptors().length === 0 && !(await openAccountDropdown())) {
+        if (option.key === selectedAccountKey) {
+          continue;
+        }
+
+        if (accountOptionDescriptors(lastAccountMenuRoot || document).length === 0 && !(await openAccountDropdown())) {
           break;
         }
         if (!clickAccountOption(option)) {
@@ -1231,22 +1882,8 @@
         }
         await wait(1200);
         ensureAccountInvestingPage();
-        collect(option.displayName);
-        for (const position of await collectStockPositionsForAccount(option.displayName)) {
-          const key = `${position.accountName}|${position.symbol}|${position.shares}|${position.averageCost}`;
-          if (!seenRows.has(key)) {
-            seenRows.add(key);
-            positions.push(position);
-          }
-        }
-      }
-    } else {
-      for (const position of await collectStockPositionsForAccount(currentAccountName())) {
-        const key = `${position.accountName}|${position.symbol}|${position.shares}|${position.averageCost}`;
-        if (!seenRows.has(key)) {
-          seenRows.add(key);
-          positions.push(position);
-        }
+        await collectAccount(option.displayName);
+        resetStockPositionScroll();
       }
     }
 
@@ -1257,6 +1894,7 @@
     return {
       positions,
       source: "robinhood-positions",
+      diagnostics,
       url: window.location.href
     };
   }
